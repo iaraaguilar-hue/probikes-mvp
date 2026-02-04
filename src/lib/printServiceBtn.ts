@@ -2,28 +2,48 @@
 import html2pdf from 'html2pdf.js';
 
 const TASKS_SPORT = [
-  "Lavado de cuadro y transmisión",
-  "Lubricación y medición de desgaste de cadena",
-  "Regulado de Cambios",
-  "Regulado de frenos (mecánicos)",
-  "Chequeo de desgaste de pastillas",
-  "Chequeo de desgaste de transmisión",
-  "Control de presión de neumáticos y tornillería"
+  "• Lavado de bicicleta y todos sus componentes",
+  "TRANSMISIÓN:",
+  "- Chequeo de desgaste",
+  "- Limpieza",
+  "- Lubricación",
+  "RUEDAS:",
+  "- Control de desgaste",
+  "- Control de presión",
+  "- No incluye centrado ni mantenimiento de maza y body",
+  "FRENOS:",
+  "- Regulado",
+  "- Limpieza de pastillas y discos",
+  "- No incluye: purgado ni cambio de líquido o componentes de ser necesario",
+  "CAMBIOS:",
+  "- Chequeo de desgaste",
+  "- Regulación",
+  "- Lubricación"
 ];
 
 const TASKS_EXPERT = [
-  "Lavado de cuadro y transmisión",
-  "Lubricación y medición de desgaste de cadena",
-  "Regulado de Cambios",
-  "Regulado de frenos (mecánicos)",
-  "Chequeo de desgaste de pastillas",
-  "Chequeo de desgaste de transmisión",
-  "Control de presión de neumáticos y tornillería",
-  "Desarme completo de caja pedalera y limpieza",
-  "Desarme completo de juego de dirección y limpieza",
-  "Limpieza de transmisión en batea de ultrasonido",
-  "Engrase general de rodamientos",
-  "Centrado de ruedas profesional"
+  "• Lavado de bicicleta y todos sus componentes",
+  "TRANSMISIÓN:",
+  "- Chequeo de desgaste",
+  "- Limpieza profunda en batea de ultrasonido",
+  "- Lubricación",
+  "RUEDAS:",
+  "- Control de desgaste",
+  "- Chequeo Líquido Tubeless",
+  "- Control de presión",
+  "- No incluye centrado ni mantenimiento de maza y body",
+  "FRENOS:",
+  "- Regulado",
+  "- Limpieza de pastillas y discos",
+  "- No incluye: purgado ni cambio de líquido o componentes de ser necesario",
+  "CAMBIOS:",
+  "- Chequeo de desgaste",
+  "- Regulación",
+  "- Lubricación",
+  "CAJA PEDALERA Y JUEGO DE DIRECCIÓN:",
+  "- Desarme completo",
+  "- Limpieza",
+  "- Engrase general de rodamientos"
 ];
 
 export const printServiceReport = (
@@ -56,7 +76,16 @@ export const printServiceReport = (
   invoiceRows.push({ description: `SERVICE ${serviceType}`, price: basePrice, isHeader: true });
 
   // Task Rows (Breakdown)
-  serviceTasks.forEach(task => invoiceRows.push({ description: task, price: 0, isTask: true }));
+  serviceTasks.forEach(task => {
+    // Detect Header vs Item
+    if (task.trim().endsWith(':')) {
+      invoiceRows.push({ description: task, isTaskHeader: true });
+    } else {
+      // Clean up bullet if present for consistent rendering
+      const cleanTask = task.replace(/^[-•]\s*/, '');
+      invoiceRows.push({ description: cleanTask, isTask: true, isMainBullet: task.includes('•') });
+    }
+  });
 
   // Extra Items
   extraItems.forEach((item: any) => invoiceRows.push({ description: item.description, price: Number(item.price) || 0, isExtra: true }));
@@ -108,9 +137,16 @@ export const printServiceReport = (
     if (row.isHeader) {
       return `<tr><td style="padding: 12px 0 4px 0; font-weight: 700; font-size: 14px; color: #f97316;">${row.description}</td><td style="padding: 12px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">${price}</td></tr>`;
     }
+    if (row.isTaskHeader) {
+      // SUB-HEADER (e.g. TRANSMISIÓN:)
+      return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #444; text-transform: uppercase;">${row.description}</td><td></td></tr>`;
+    }
     if (row.isTask) {
       // Indented, bulleted, smaller gray text
-      return `<tr><td style="padding: 1px 0 1px 15px; font-size: 11px; color: #666; line-height: 1.4;">• ${row.description}</td><td></td></tr>`;
+      // Main bullet (Lavado) vs Sub-item (-)
+      const padding = row.isMainBullet ? "5px 0 5px 0" : "1px 0 1px 15px";
+      const weight = row.isMainBullet ? "600" : "400";
+      return `<tr><td style="padding: ${padding}; font-size: 11px; color: #666; font-weight: ${weight}; line-height: 1.4;">• ${row.description}</td><td></td></tr>`;
     }
     return `<tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; color: #444;">${row.description}</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 14px;">${price}</td></tr>`;
   }).join('')}
