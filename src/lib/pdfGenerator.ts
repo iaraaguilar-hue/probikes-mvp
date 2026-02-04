@@ -1,0 +1,134 @@
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import type { ServiceRecord, Bike, Client } from "./api";
+
+export const generateServiceReport = (service: ServiceRecord, bike: Bike, client: Client) => {
+    const doc = new jsPDF();
+
+    // --- Header ---
+    // Shimano Blue Header
+    doc.setFillColor(0, 173, 247); // #00adf7
+    doc.rect(0, 0, 210, 30, "F");
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("INFORME DE SERVICIO", 105, 20, { align: "center" });
+
+    doc.setTextColor(0, 0, 0);
+
+    // --- Info Section ---
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 14;
+    let yPos = 40;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+
+    // Date
+    const dateOut = service.date_out
+        ? new Date(service.date_out).toLocaleDateString("es-AR")
+        : new Date().toLocaleDateString("es-AR");
+    doc.text(`Fecha de Salida: ${dateOut}`, margin, yPos);
+
+    yPos += 10;
+
+    // Two Column Layout
+    // Col 1: Client
+    doc.setFont("helvetica", "bold");
+    doc.text("CLIENTE", margin, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(client.name, margin, yPos + 5);
+    doc.text(client.phone, margin, yPos + 10);
+
+    // Col 2: Bike
+    const col2X = pageWidth / 2 + 10;
+    doc.setFont("helvetica", "bold");
+    doc.text("BICICLETA", col2X, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${bike.brand} ${bike.model}`, col2X, yPos + 5);
+    doc.text(`Transmisión: ${bike.transmission || "N/A"}`, col2X, yPos + 10);
+
+    yPos += 20;
+
+    // --- Service Type Badge ---
+    doc.setDrawColor(0, 0, 0);
+    doc.setFillColor(240, 240, 240);
+    doc.roundedRect(margin, yPos, 60, 10, 2, 2, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.text(`SERVICIO: ${service.service_type.toUpperCase()}`, margin + 5, yPos + 6.5);
+
+    yPos += 20;
+
+    // --- Checklist ---
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("TAREAS REALIZADAS", margin, yPos);
+    yPos += 5;
+
+    // Filter only checked items
+    const tasks = service.checklist_data
+        ? Object.entries(service.checklist_data)
+            .filter(([_, done]) => done)
+            .map(([task]) => [task])
+        : [];
+
+    if (tasks.length > 0) {
+        autoTable(doc, {
+            startY: yPos,
+            head: [],
+            body: tasks,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { cellWidth: 'auto' } },
+            margin: { left: margin },
+        });
+        // @ts-ignore
+        yPos = doc.lastAutoTable.finalY + 15;
+    } else {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(10);
+        doc.text("No se registraron tareas específicas.", margin, yPos + 5);
+        yPos += 15;
+    }
+
+    // --- Parts and Notes ---
+
+    // Repuestos
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("REPUESTOS E INSUMOS", margin, yPos);
+    yPos += 7;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const partsText = service.parts_used || "Ninguno.";
+    const splitParts = doc.splitTextToSize(partsText, pageWidth - (margin * 2));
+    doc.text(splitParts, margin, yPos);
+    yPos += splitParts.length * 5 + 10;
+
+    // Observaciones
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("OBSERVACIONES / DIAGNÓSTICO", margin, yPos);
+    yPos += 7;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const notesText = service.mechanic_notes || "Sin observaciones.";
+    // Sanitize timestamps: Remove [DD/MM HH:MM] or similar patterns
+    const cleanNotes = notesText.replace(/\[\d{1,2}\/\d{1,2}.*?\]\s?/g, "");
+
+    const splitNotes = doc.splitTextToSize(cleanNotes, pageWidth - (margin * 2));
+    doc.text(splitNotes, margin, yPos);
+
+    // --- Footer ---
+    const footerY = 280;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Gracias por confiar en nosotros.", margin, footerY);
+    doc.text("GENERADO CON MECHANIC PRO", pageWidth - margin, footerY, { align: "right" });
+
+    doc.save(`Service_${service.id}_${client.name}.pdf`);
+};
