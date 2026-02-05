@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Eye, Download, Upload, CheckCircle, ChevronDown, ChevronUp, FileDown, ExternalLink } from 'lucide-react';
+import { FileText, Eye, Download, Upload, CheckCircle, ChevronUp, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { printServiceReport } from '@/lib/printServiceBtn';
 

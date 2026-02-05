@@ -23,8 +23,17 @@ function App() {
 
   // Run Data Migration & Check Auth on Startup
   useEffect(() => {
-    migrateServiceIds();
-    migrateClientIds();
+    try {
+      migrateServiceIds();
+    } catch (e) {
+      console.error("Migration ID error", e);
+    }
+
+    try {
+      migrateClientIds();
+    } catch (e) {
+      console.error("Migration Client ID error", e);
+    }
 
     // Check Auth
     const auth = localStorage.getItem("probikes_auth");

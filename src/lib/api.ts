@@ -19,9 +19,14 @@ interface DB {
 }
 
 const getDB = (): DB => {
-    const raw = localStorage.getItem(DB_KEY);
-    if (!raw) return initializeDB();
-    return JSON.parse(raw);
+    try {
+        const raw = localStorage.getItem(DB_KEY);
+        if (!raw) return initializeDB();
+        return JSON.parse(raw);
+    } catch (error) {
+        console.error("Failed to parse DB from localStorage, resetting...", error);
+        return initializeDB(); // Recover by resetting
+    }
 };
 
 const saveDB = (db: DB) => {
@@ -68,6 +73,7 @@ export interface Client {
     name: string;
     dni?: string;
     phone: string;
+    email?: string;
     usage_tier: UsageTier;
     isDeleted?: boolean;
 }
@@ -125,6 +131,8 @@ export interface FleetItem {
     bike_id: number;
     client_name: string;
     client_id: number | null;
+    client_display_id?: string;
+    client_tier?: string;
     bike_model: string;
     bike_type: string;
     transmission: string;
@@ -304,10 +312,14 @@ export const migrateServiceIds = () => {
             idMapping[oldId] = newId;
         });
 
-        db.services = sortedServices;
-        saveDB(db);
-        console.log("Migration Complete. Converted", sortedServices.length, "services.");
-        window.location.reload(); // Force reload to reflect changes in UI/State
+        if (JSON.stringify(db.services) !== JSON.stringify(sortedServices)) {
+            db.services = sortedServices;
+            saveDB(db);
+            console.log("Migration Complete. Converted", sortedServices.length, "services.");
+            window.location.reload();
+        } else {
+            console.log("Migration checked, no changes needed.");
+        }
     }
 };
 
@@ -365,6 +377,23 @@ export const updateBike = async (bikeId: number, bike: Partial<Bike>) => {
     db.bikes[index] = { ...db.bikes[index], ...bike };
     saveDB(db);
     return db.bikes[index];
+};
+
+export const deleteBike = async (bikeId: number) => {
+    const db = getDB();
+    const index = db.bikes.findIndex(b => b.id === bikeId);
+    if (index === -1) throw new Error("Bike not found");
+
+    // Remove the bike
+    db.bikes.splice(index, 1);
+
+    // Optional: Cascade delete services/reminders or keep them orphaned?
+    // Usage implies we just want to remove the bike from the list.
+    // Let's keep services for history but maybe mark them or just leave them.
+    // For now, strict deletion of the bike entry.
+
+    saveDB(db);
+    return true;
 };
 
 export const updateServiceStatus = async (serviceId: number, status: string) => {
@@ -469,6 +498,15 @@ export const getBikeServices = async (bikeId: number) => {
     return db.services.filter(s => s.bike_id === bikeId);
 };
 
+export const getClientServices = async (clientId: number) => {
+    const db = getDB();
+    // Filter services belonging to any bike owned by this client
+    return db.services.filter(s => {
+        const bike = db.bikes.find(b => b.id === s.bike_id);
+        return bike?.client_id === clientId;
+    });
+};
+
 export const getFleetStatus = async () => {
     const db = getDB();
     // 1. Construct fleet items from bikes (Standard)
@@ -490,6 +528,8 @@ export const getFleetStatus = async () => {
             bike_id: bike.id!,
             client_name: client?.name || "Unknown",
             client_id: client?.id || 0,
+            client_display_id: client?.displayId || "?",
+            client_tier: client?.usage_tier || "C",
             bike_model: bike.model,
             bike_type: "Standard",
             transmission: bike.transmission,
@@ -507,6 +547,8 @@ export const getFleetStatus = async () => {
         bike_id: 0, // Signal for "No Bike"
         client_name: client.name,
         client_id: client.id!,
+        client_display_id: client.displayId || "?",
+        client_tier: client.usage_tier || "C",
         bike_model: "Sin Bicicletas", // Placeholder
         bike_type: "N/A",
         transmission: "-",

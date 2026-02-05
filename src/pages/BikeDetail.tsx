@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getBike, getBikeServices, getBikeReminders, getClient, updateClient, updateBike, getClientBikes } from "@/lib/api";
+import { getBike, getBikeServices, getBikeReminders, getClient, updateClient, updateBike, deleteBike, getClientBikes, getClientServices } from "@/lib/api";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Wrench, AlertTriangle, CheckCircle, Clock, Pencil, Save, FileDown, Plus } from "lucide-react";
+import { ArrowLeft, Wrench, AlertTriangle, CheckCircle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
@@ -49,39 +50,70 @@ export default function BikeDetail() {
         enabled: activeClientId > 0,
     });
 
-    const { data: clientBikes } = useQuery({
-        queryKey: ["bikes", activeClientId],
-        queryFn: () => getClientBikes(activeClientId),
-        enabled: activeClientId > 0,
+    // --- STATE REFACTOR FOR MULTI-BIKE VIEW ---
+
+
+
+    // --- STATE REFACTOR FOR MULTI-BIKE VIEW ---
+    // Instead of relying purely on URL ID, we track "activeBikeId" locally.
+    // If URL has ID, that's the default. If not, we pick first bike.
+
+    // 1. Fetch Client Context First (Always valid if we have clientId or bikeId)
+    // We need to know who the client is early.
+
+    // Derived Active Client ID
+    const [derivedClientId, setDerivedClientId] = useState<number>(activeClientId);
+
+    // Update derived client if URL params change (refresh context)
+    useEffect(() => {
+        if (activeClientId > 0) setDerivedClientId(activeClientId);
+    }, [activeClientId]);
+
+    const { data: latestClientBikes, isLoading: loadingClientBikes } = useQuery({
+        queryKey: ["bikes", derivedClientId],
+        queryFn: () => getClientBikes(derivedClientId),
+        enabled: derivedClientId > 0,
     });
 
-    // --- LOGIC: Auto-Trigger after creation ---
-    useEffect(() => {
-        // If coming from "Add Bike" redirect
-        if (location.state?.autoStartService && bike) {
-            setIsServiceDialogOpen(true);
-            // Clear state to avoid reopening on refresh
-            window.history.replaceState({}, document.title);
-        }
-    }, [location.state, bike]);
+    const [activeBikeId, setActiveBikeId] = useState<number>(initialBikeId);
 
-    // Handle "Client Mode" -> Auto-select bike or Prompt
+    // Auto-Select Logic
     useEffect(() => {
-        // Logic 1: If we are at root /clients/:clientId but haven't selected a bike, and bikes exist, redirect to the first one.
-        if (!initialBikeId && clientBikes && clientBikes.length > 0) {
-            navigate(`/bikes/${clientBikes[0].id}`, { replace: true });
-            return;
-        } else if (!initialBikeId && clientBikes && clientBikes.length === 0) {
-            // Logic 2: If we are at root /clients/:clientId and NO bikes exist, open the "Add Bike" dialog.
-            // Only trigger this once to avoid loops
-            const key = `prompted_${activeClientId}`;
-            const hasPrompted = sessionStorage.getItem(key);
-            if (!hasPrompted) {
-                setIsAddBikeOpen(true);
-                sessionStorage.setItem(key, 'true');
-            }
+        // If we entered via /bikes/:id, set that as active
+        if (initialBikeId > 0) {
+            setActiveBikeId(initialBikeId);
         }
-    }, [clientBikes, initialBikeId, navigate, activeClientId]);
+        // If we entered via /clients/:clientId, select first bike if available
+        else if (initialBikeId === 0 && latestClientBikes && latestClientBikes.length > 0) {
+            setActiveBikeId(latestClientBikes[0].id!);
+        }
+    }, [initialBikeId, latestClientBikes]);
+
+    // --- LOGIC: Auto-Trigger Service Dialog ---
+    useEffect(() => {
+        // Only trigger if specifically requested via state AND we have an active bike
+        if (location.state?.autoStartService && activeBikeId) {
+            // Check if we already handled this to prevent re-opening on tab switch
+            // We use history replacement to clear the flag immediately
+            setIsServiceDialogOpen(true);
+
+            // Clear the state so it doesn't trigger again on refresh or re-render
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, activeBikeId, navigate, location.pathname]);
+
+    // Active Bike Data
+    const activeBike = latestClientBikes?.find(b => b.id === activeBikeId);
+
+    // Client Stats (Total Services)
+    const { data: allClientServices } = useQuery({
+        queryKey: ["client_all_services", derivedClientId],
+        queryFn: () => getClientServices(derivedClientId),
+        enabled: derivedClientId > 0
+    });
+
+    const clientTotalServices = allClientServices?.filter(s => s.status === "Completed").length || 0;
+
 
 
     // UI State
@@ -101,6 +133,9 @@ export default function BikeDetail() {
     const [editModel, setEditModel] = useState("");
     const [editTransmission, setEditTransmission] = useState("");
 
+    // NEW: Track which bike we are editing in the Garage Tab
+    const [editingBikeId, setEditingBikeId] = useState<number | null>(null);
+
     const updateClientMutation = useMutation({
         mutationFn: async () => {
             // 1. Update Client
@@ -112,9 +147,10 @@ export default function BikeDetail() {
                     email: editEmail
                 });
             }
-            // 2. Update Bike (Only if we have one acting as context)
-            if (bike) {
-                await updateBike(bike.id ?? 0, {
+            // 2. Update Bike (Only if we have one explicitly editing or context)
+            const targetBikeId = editingBikeId || bike?.id;
+            if (targetBikeId) {
+                await updateBike(targetBikeId, {
                     brand: editBrand,
                     model: editModel,
                     transmission: editTransmission
@@ -123,8 +159,30 @@ export default function BikeDetail() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["client", activeClientId] });
-            if (bike) queryClient.invalidateQueries({ queryKey: ["bike", bike.id] });
-            setIsEditOpen(false);
+            if (activeClientId) queryClient.invalidateQueries({ queryKey: ["bikes", activeClientId] });
+
+            // If we were editing a specific bike, go back to list
+            if (editingBikeId) {
+                setEditingBikeId(null);
+            } else {
+                setIsEditOpen(false);
+            }
+        }
+    });
+
+    const deleteBikeMutation = useMutation({
+        mutationFn: async (idToDelete?: number) => {
+            const targetId = idToDelete || editingBikeId || bike?.id;
+            if (targetId) {
+                await deleteBike(targetId);
+            }
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["bikes", activeClientId] });
+            setEditingBikeId(null); // Go back to list if we were editing
+            // If the deleted bike was the active one, reset activeBikeId
+            // We rely on the effect to pick a new one, but let's be safe
+            // setActiveBikeId(0);
         }
     });
 
@@ -132,39 +190,43 @@ export default function BikeDetail() {
         if (client) {
             setEditName(client.name);
             setEditPhone(client.phone);
-            // setEditEmail(client.email || ""); 
+            setEditEmail(client.email || "");
 
-            if (bike) {
-                setEditBrand(bike.brand);
-                setEditModel(bike.model);
-                setEditTransmission(bike.transmission);
-            } else {
-                // Clear bike fields if editing client only (though UI bundles them currently)
-                setEditBrand("");
-                setEditModel("");
-                setEditTransmission("");
-            }
+            // Reset Garage Tab Logic
+            setEditingBikeId(null);
+            // Pre-fill inputs just in case, or clear them
+            setEditBrand("");
+            setEditModel("");
+            setEditTransmission("");
+
             setIsEditOpen(true);
         }
-    }
+    };
+
+    const startEditingBike = (b: any) => {
+        setEditingBikeId(b.id);
+        setEditBrand(b.brand);
+        setEditModel(b.model);
+        setEditTransmission(b.transmission);
+    };
 
     const { data: services, isLoading: loadingServices } = useQuery({
-        queryKey: ["bike_services", initialBikeId],
-        queryFn: () => getBikeServices(initialBikeId),
-        enabled: initialBikeId > 0
+        queryKey: ["bike_services", activeBikeId],
+        queryFn: () => getBikeServices(activeBikeId),
+        enabled: activeBikeId > 0
     });
 
     const { data: reminders, isLoading: loadingReminders } = useQuery({
-        queryKey: ["bike_reminders", initialBikeId],
-        queryFn: () => getBikeReminders(initialBikeId),
-        enabled: initialBikeId > 0
+        queryKey: ["bike_reminders", activeBikeId],
+        queryFn: () => getBikeReminders(activeBikeId),
+        enabled: activeBikeId > 0
     });
 
     // Loading State
-    if (initialBikeId > 0 && loadingBike) return <div className="p-8"><Skeleton className="h-10 w-1/3 mb-4" /><Skeleton className="h-64 w-full" /></div>;
+    if (activeClientId > 0 && loadingBike && loadingClientBikes) return <div className="p-8"><Skeleton className="h-10 w-1/3 mb-4" /><Skeleton className="h-64 w-full" /></div>;
 
-    // "No Bike" State (Client Mode)
-    const isClientMode = !initialBikeId && activeClientId > 0;
+    // "No Bike" State
+    const isClientMode = !activeBikeId && latestClientBikes?.length === 0;
 
     // Safety check
     if (!client && !loadingBike) return <div className="p-8">Cliente no encontrado.</div>;
@@ -181,49 +243,71 @@ export default function BikeDetail() {
                     </Link>
                     <span>/</span>
                     <span className="font-semibold text-foreground">
-                        {bike ? `${bike.brand} ${bike.model}` : client?.name}
+                        {client?.name}
                     </span>
                 </div>
 
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-xl border shadow-sm">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            {bike ? (
-                                <>
-                                    {bike.brand} <span className="text-primary">{bike.model}</span>
-                                </>
-                            ) : (
-                                <span className="text-primary">Perfil del Cliente</span>
-                            )}
-                        </h1>
-                        <p className="text-lg text-muted-foreground flex items-center gap-2 mt-1">
-                            <span className="font-semibold flex items-center gap-2">
+                <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+                    {/* Header Row */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                                 {client?.name}
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleEditClick}>
+                            </h1>
+                            <div className="flex items-center gap-3 mt-1 text-muted-foreground">
+                                <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded text-sm">
+                                    <span className="font-bold text-slate-700">#{client?.displayId}</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    Total Services: <span className="font-bold text-slate-900">{clientTotalServices}</span>
+                                </span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-2" onClick={handleEditClick}>
                                     <Pencil className="h-3 w-3" />
                                 </Button>
-                            </span>
-                            {bike && (
-                                <>• <span className="text-sm bg-slate-100 px-2 py-0.5 rounded-full">{bike.transmission}</span></>
-                            )}
-                        </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <Button onClick={() => setIsAddBikeOpen(true)} variant="outline">
+                                <Plus className="mr-2 h-4 w-4" /> Nueva Bici
+                            </Button>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Start Service Button (Only when bike active) */}
-                        {bike && (
-                            <Button size="lg" className="shadow-md bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
-                                <Wrench className="mr-2 h-5 w-5" /> Iniciar Service
-                            </Button>
-                        )}
+                    {/* Bike Tabs / Switcher */}
+                    {latestClientBikes && latestClientBikes.length > 0 && (
+                        <div className="flex overflow-x-auto gap-2 pb-1 border-b">
+                            {latestClientBikes.map(b => (
+                                <button
+                                    key={b.id}
+                                    onClick={() => setActiveBikeId(b.id!)}
+                                    className={cn(
+                                        "flex flex-col items-start px-4 py-2 rounded-t-lg transition-all min-w-[140px] border-b-2",
+                                        activeBikeId === b.id
+                                            ? "border-orange-500 bg-orange-50/50 text-orange-900"
+                                            : "border-transparent hover:bg-slate-50 text-slate-500"
+                                    )}
+                                >
+                                    <span className={cn("font-bold text-sm", activeBikeId === b.id ? "text-orange-700" : "text-slate-700")}>
+                                        {b.model}
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-wider">{b.brand}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
-                        {/* Switcher / Add Bike Button */}
-                        {isClientMode && (
-                            <Button onClick={() => setIsAddBikeOpen(true)}>
-                                <Plus className="mr-2 h-4 w-4" /> Agregar Bicicleta
+                    {/* Active Bike Actions Bar */}
+                    {activeBike && (
+                        <div className="flex justify-between items-center pt-2">
+                            <div className="text-sm text-slate-500">
+                                Transmisión: <span className="font-medium text-slate-900">{activeBike.transmission || "N/A"}</span>
+                            </div>
+                            <Button size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
+                                <Wrench className="mr-2 h-4 w-4" /> Iniciar Service
                             </Button>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -527,58 +611,123 @@ export default function BikeDetail() {
                 />
             )}
 
-            {/* Edit Dialog */}
+            {/* Edit Dialog - Refactored with Tabs */}
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                         <DialogTitle>Editar Perfil</DialogTitle>
+                        <DialogDescription>
+                            Modifica los datos del cliente o gestiona la bicicleta seleccionada.
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4 max-h-[80vh] overflow-y-auto pr-2">
-                        {/* Section: Client */}
-                        <div className="rounded-md bg-muted/30 p-3 border">
-                            <h4 className="text-sm font-bold text-muted-foreground uppercase mb-3 flex items-center gap-2">
-                                <span className="w-1 h-4 bg-primary rounded-full"></span> Datos del Cliente
-                            </h4>
-                            <div className="space-y-3">
-                                <div className="space-y-1">
-                                    <Label htmlFor="name">Nombre Completo</Label>
-                                    <Input id="name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="phone">Teléfono</Label>
-                                    <Input id="phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input id="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="cliente@email.com" />
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Section: Bike (Only if bike exists) */}
-                        {bike && (
-                            <div className="rounded-md bg-muted/30 p-3 border">
-                                <h4 className="text-sm font-bold text-muted-foreground uppercase mb-3 flex items-center gap-2">
-                                    <span className="w-1 h-4 bg-blue-500 rounded-full"></span> Datos de la Bicicleta
-                                </h4>
+                    <Tabs defaultValue="client" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="client" className="flex items-center gap-2"><User size={14} /> Cliente</TabsTrigger>
+                            <TabsTrigger value="garage" className="flex items-center gap-2"><BikeIcon size={14} /> Garage</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="client" className="space-y-4 py-4">
+                            <div className="space-y-1">
+                                <Label htmlFor="name">Nombre Completo</Label>
+                                <Input id="name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="phone">Teléfono</Label>
+                                <Input id="phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="email">Email</Label>
+                                <Input id="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="cliente@email.com" />
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="garage" className="space-y-4 py-4">
+                            {/* LIST VIEW */}
+                            {!editingBikeId && latestClientBikes && (
                                 <div className="space-y-3">
-                                    <div className="space-y-1">
-                                        <Label htmlFor="brand">Marca</Label>
-                                        <Input id="brand" value={editBrand} onChange={(e) => setEditBrand(e.target.value)} />
+                                    {latestClientBikes.length === 0 && <p className="text-center text-muted-foreground p-4">No hay bicicletas.</p>}
+                                    {latestClientBikes.map(b => (
+                                        <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                                                    <BikeIcon size={16} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-sm text-slate-900">{b.brand} {b.model}</p>
+                                                    <p className="text-xs text-slate-500">{b.transmission}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600" onClick={() => startEditingBike(b)}>
+                                                    <Pencil size={14} />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-slate-500 hover:text-red-600"
+                                                    onClick={() => {
+                                                        if (confirm(`¿Eliminar ${b.brand} ${b.model}?`)) {
+                                                            deleteBikeMutation.mutate(b.id);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <Button variant="outline" className="w-full border-dashed" onClick={() => setIsAddBikeOpen(true)}>
+                                        <Plus className="mr-2 h-4 w-4" /> Agregar Nueva Bicicleta
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* EDIT VIEW */}
+                            {editingBikeId && (
+                                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Button variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-muted-foreground" onClick={() => setEditingBikeId(null)}>
+                                            <ArrowLeft size={16} className="mr-1" /> Volver
+                                        </Button>
+                                        <span className="font-bold text-sm">Editando Bicicleta</span>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="model">Modelo</Label>
-                                        <Input id="model" value={editModel} onChange={(e) => setEditModel(e.target.value)} />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="transmission">Transmisión (Grupos)</Label>
-                                        <Input id="transmission" value={editTransmission} onChange={(e) => setEditTransmission(e.target.value)} placeholder="Ej: Shimano 105" />
+
+                                    <div className="space-y-3">
+                                        <div className="space-y-1">
+                                            <Label htmlFor="brand">Marca</Label>
+                                            <Input id="brand" value={editBrand} onChange={(e) => setEditBrand(e.target.value)} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="model">Modelo</Label>
+                                            <Input id="model" value={editModel} onChange={(e) => setEditModel(e.target.value)} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="transmission">Transmisión</Label>
+                                            <Input id="transmission" value={editTransmission} onChange={(e) => setEditTransmission(e.target.value)} placeholder="Ej: Shimano 105" />
+                                        </div>
+
+                                        <div className="pt-4 border-t mt-4">
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                className="w-full gap-2"
+                                                onClick={() => {
+                                                    if (confirm("¿Estás seguro de que quieres eliminar esta bicicleta? Esta acción no se puede deshacer y borrará el historial asociado.")) {
+                                                        deleteBikeMutation.mutate(editingBikeId);
+                                                    }
+                                                }}
+                                                disabled={deleteBikeMutation.isPending}
+                                            >
+                                                <Trash2 className="h-4 w-4" /> Eliminar Bicicleta del Sistema
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </TabsContent>
+                    </Tabs>
 
-                    </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
                         <Button onClick={() => updateClientMutation.mutate()} disabled={updateClientMutation.isPending}>
@@ -593,9 +742,9 @@ export default function BikeDetail() {
                 isOpen={isServiceDialogOpen}
                 onClose={() => setIsServiceDialogOpen(false)}
                 initialClientData={client ? client : null}
-                initialBikeData={bike ? bike : null}
+                initialBikeData={activeBike ? activeBike : null}
                 preSelectedClientId={client?.id}
-                preSelectedBikeId={bike?.id}
+                preSelectedBikeId={activeBike?.id}
             />
 
         </div >

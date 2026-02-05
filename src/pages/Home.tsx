@@ -1,146 +1,168 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getFleetStatus, deleteClient } from "@/lib/api";
+import { getFleetStatus, deleteClient, type FleetItem } from "@/lib/api";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, AlertTriangle, CheckCircle, Clock, Bike, PlusCircle, Trash2 } from "lucide-react";
+import { Search, PlusCircle, Trash2, Clock, CheckCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-    const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Real Data Fetching
     const { data: fleet, isLoading, refetch } = useQuery({
         queryKey: ["fleet"],
         queryFn: getFleetStatus,
     });
 
-
-
-    const filteredFleet = fleet?.filter(item =>
+    const filteredItems = fleet?.filter(item =>
         item.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.bike_model.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    ) || [];
+
+    // Grouping
+    const groupedClients: Record<number, {
+        clientName: string,
+        displayId: string,
+        tier: string,
+        bikes: FleetItem[]
+    }> = {};
+
+    filteredItems.forEach(item => {
+        if (!groupedClients[item.client_id!]) {
+            groupedClients[item.client_id!] = {
+                clientName: item.client_name,
+                displayId: item.client_display_id || "?",
+                tier: item.client_tier || "Standard",
+                bikes: []
+            };
+        }
+        if (item.bike_id > 0) {
+            groupedClients[item.client_id!].bikes.push(item);
+        }
+    });
+
+    const clientList = Object.entries(groupedClients).map(([id, data]) => ({
+        clientId: Number(id),
+        ...data
+    }));
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-8 max-w-7xl mx-auto py-8 px-6 animate-in fade-in duration-500">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <img src="/img/logo_full.png" alt="ProBikes" className="h-28 w-auto" />
-                    <p className="text-muted-foreground mt-1">Base de Datos de Flota y Clientes</p>
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6 pb-2">
+                <div className="flex items-center gap-3">
+                    <img src="/img/logo_full.png" alt="ProBikes" className="h-16 w-auto" />
                 </div>
-                <div className="relative w-full md:w-96">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar por cliente o modelo..."
-                        className="pl-10"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+
+                <div className="flex items-center gap-4 flex-1 justify-end w-full md:w-auto">
+                    <div className="relative w-full md:w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                            placeholder="Buscar por cliente o modelo..."
+                            className="pl-10 h-11 bg-white border-slate-200 focus-visible:ring-orange-500"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
-                {/* 
-                <Button variant="outline" size="sm" onClick={() => seedMutation.mutate()}>
-                    ⚡ Cargar Datos de Prueba
-                </Button>
-                */}
             </div>
 
-            {/* Grid Content */}
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-medium text-slate-600">Base de Datos de Flota y Clientes</h2>
+                <Link to="/reception">
+                    <Button className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-6">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
+                    </Button>
+                </Link>
+            </div>
+
+            {/* Grid */}
             {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                        <Card key={i} className="h-40">
-                            <CardContent className="p-6">
-                                <Skeleton className="h-6 w-3/4 mb-2" />
-                                <Skeleton className="h-4 w-1/2 mb-4" />
-                                <Skeleton className="h-8 w-24" />
-                            </CardContent>
-                        </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <Skeleton key={i} className="h-32 w-full rounded-lg" />
                     ))}
                 </div>
-            ) : fleet?.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl bg-slate-50 text-center animate-in zoom-in-50 duration-300">
-                    <Bike className="h-16 w-16 text-primary/50 mb-4" />
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Base de datos vacía</h3>
-                    <p className="text-muted-foreground mb-8 text-lg">
-                        No hay clientes ni bicicletas registradas aún.
-                    </p>
-                    <Link to="/reception">
-                        <Button size="lg" className="text-lg h-12 px-8 shadow-lg hover:shadow-primary/20 transition-all">
-                            <PlusCircle className="mr-2 h-5 w-5" />
-                            + Agregar Primer Cliente
-                        </Button>
-                    </Link>
-                </div>
-            ) : filteredFleet?.length === 0 ? (
-                <div className="text-center py-12">
-                    <p className="text-muted-foreground">No se encontraron resultados para "{searchTerm}"</p>
+            ) : clientList.length === 0 ? (
+                <div className="text-center py-20 text-slate-400">
+                    <p className="text-lg">No se encontraron resultados</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredFleet?.map((bike, index) => (
-                        <Card
-                            key={bike.bike_id}
-                            className="hover:border-primary hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => {
-                                if (bike.bike_id === 0) {
-                                    navigate(`/clients/${bike.client_id}`);
-                                } else {
-                                    navigate(`/bikes/${bike.bike_id}`);
-                                }
-                            }}
-                        >
-                            <CardContent className="p-6 flex flex-col h-full justify-between">
-                                <div>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h3 className="text-xl font-bold text-slate-900 group-hover:text-primary transition-colors">
-                                            {bike.client_name}
-                                        </h3>
-                                        <div className="flex items-center gap-1">
-                                            <Badge variant="secondary" className="font-mono text-xs">
-                                                #{index !== undefined ? index + 1 : (bike.bike_id || "-")}
-                                            </Badge>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 text-red-400 hover:text-red-700 hover:bg-red-50"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (window.confirm(`¿Estás seguro de eliminar el cliente ${bike.client_name} y todos sus datos?`)) {
-                                                        deleteClient(bike.client_id!).then(() => refetch());
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 size={14} />
-                                            </Button>
-                                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {clientList.map((client) => (
+                        <div key={client.clientId} className="relative group">
+                            {/* Card Container - Clickable Link */}
+                            <Link
+                                to={`/clients/${client.clientId}`}
+                                className="block bg-white rounded-lg border border-slate-100 shadow-sm hover:shadow-md transition-all duration-200 p-3 h-full"
+                            >
+                                {/* Client Header */}
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-base font-bold text-slate-900">{client.clientName}</h3>
+                                        <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-none px-1.5 py-0 rounded text-[10px]">
+                                            #{client.displayId}
+                                        </Badge>
                                     </div>
-                                    <p className="font-medium text-slate-600 mb-1">{bike.bike_model}</p>
-                                    <p className="text-sm text-muted-foreground mb-4">{bike.bike_type}</p>
+                                    <div className="z-10 relative" onClick={(e) => e.preventDefault()}>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-slate-300 hover:text-red-500 hover:bg-red-50"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                if (window.confirm(`¿Eliminar a ${client.clientName}?`)) {
+                                                    deleteClient(client.clientId).then(() => refetch());
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 size={18} />
+                                        </Button>
+                                    </div>
                                 </div>
 
-                                <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                    {bike.next_due_date ? (
-                                        <ReminderBadge
-                                            date={bike.next_due_date}
-                                            component={bike.next_due_component!}
-                                        />
+                                {/* Bikes List */}
+                                <div className="space-y-2">
+                                    {client.bikes.length > 0 ? (
+                                        client.bikes.map((bike) => (
+                                            <div key={bike.bike_id} className="border-t border-slate-50 pt-2 first:border-0 first:pt-0">
+                                                <div className="flex justify-between items-start mb-0.5">
+                                                    <div>
+                                                        <p className="font-semibold text-slate-700 text-sm">{bike.bike_model}</p>
+                                                        <p className="text-xs text-slate-400">{bike.transmission || "Standard"}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {/* Next Due Alert */}
+                                                    {bike.next_due_date ? (
+                                                        <div className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1">
+                                                            <Clock size={10} />
+                                                            {bike.next_due_component}: {new Date(bike.next_due_date).toLocaleDateString()}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1">
+                                                            <CheckCircle size={10} />
+                                                            Ok
+                                                        </div>
+                                                    )}
+
+                                                    {/* Service Count */}
+                                                    <div className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                                                        {bike.service_count} S.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
                                     ) : (
-                                        <Badge variant="outline" className="text-slate-500 bg-slate-50 border-slate-200 font-normal">
-                                            <CheckCircle className="mr-1 h-3 w-3" /> Sin alertas
-                                        </Badge>
+                                        <p className="text-slate-400 italic text-sm">Sin bicicletas registradas</p>
                                     )}
-                                    <span className="text-xs font-medium text-muted-foreground bg-slate-100 px-2 py-1 rounded-full">
-                                        {bike.service_count} Serv.
-                                    </span>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </Link>
+                        </div>
                     ))}
                 </div>
             )}
@@ -148,29 +170,5 @@ export default function Home() {
     );
 }
 
-function ReminderBadge({ date, component }: { date: string, component: string }) {
-    const dueDate = new Date(date);
-    const now = new Date();
-    const diffTime = dueDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    let colorClass = "bg-green-100 text-green-700 border-green-200";
-    let icon = <Clock className="mr-1 h-3 w-3" />;
-    let text = new Date(date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
-    if (diffDays < 0) {
-        colorClass = "bg-red-100 text-red-700 border-red-200 animate-pulse";
-        icon = <AlertTriangle className="mr-1 h-3 w-3" />;
-        text = "Vencido";
-    } else if (diffDays < 30) {
-        colorClass = "bg-orange-100 text-orange-800 border-orange-200";
-        text = `${diffDays} días`;
-    }
-
-    return (
-        <Badge className={`font-medium border ${colorClass} shadow-none flex items-center`}>
-            {icon}
-            <span className="truncate max-w-[100px] mr-1">{component}:</span> {text}
-        </Badge>
-    );
-}
