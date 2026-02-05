@@ -74,15 +74,18 @@ export default function ServiceJob() {
     };
 
     const triggerMakeWebhook = async (soldItems: any[]) => {
-        // Force items if empty to ensure structure matches Make
-        const productsToSend = soldItems.length > 0 ? soldItems : [{ description: "Producto de Prueba", price: 0, category: "part" }];
+        // STRICT CONDITION: Only send if there are actually items sold
+        if (!soldItems || soldItems.length === 0) {
+            console.log("No sold items, skipping webhook.");
+            return;
+        }
 
         const payload = {
             dni_cliente: clientData.dni || "Sin DNI",
             nombre_cliente: clientData.name || "Cliente",
             fecha_finalizacion: new Date().toISOString(),
-            nombre_producto: productsToSend.map((i: any) => i.description).join(', '),
-            productos: productsToSend.map((i: any) => ({
+            nombre_producto: soldItems.map((i: any) => i.description).join(', '),
+            productos: soldItems.map((i: any) => ({
                 descripcion: i.description,
                 precio: i.price
             })),
@@ -99,7 +102,7 @@ export default function ServiceJob() {
             // Silent success
         } catch (error: any) {
             console.error("Webhook Error:", error);
-            alert("Aviso: El service se guardó, pero hubo un error enviando los datos a Make.");
+            // Silent fail - do not disturb user workflow
         }
     };
 
