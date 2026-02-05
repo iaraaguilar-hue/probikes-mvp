@@ -73,38 +73,63 @@ export default function ServiceJob() {
         alert("Notas guardadas.");
     };
 
+    // --- FUNCIÓN DEL WEBHOOK CORREGIDA Y BLINDADA ---
     const triggerMakeWebhook = async (soldItems: any[]) => {
-        // STRICT CONDITION: Only send if there are actually items sold
-        if (!soldItems || soldItems.length === 0) {
-            console.log("No sold items, skipping webhook.");
+        console.log("🚀 Iniciando proceso de Webhook...");
+
+        // 1. Validación de seguridad: Si faltan datos críticos, abortar.
+        if (!job || !clientData) {
+            console.error("❌ Webhook abortado: Faltan datos del trabajo o del cliente.");
             return;
         }
 
-        const payload = {
-            dni_cliente: clientData?.dni || "Sin DNI",
-            nombre_cliente: clientData?.name || "Cliente",
-            fecha_finalizacion: new Date().toISOString(),
-            nombre_producto: soldItems.map((i: any) => i.description).join(', '),
-            productos: soldItems.map((i: any) => ({
-                descripcion: i.description,
-                precio: Number(i.price) || 0
-            })),
-            total_service: Number(job?.totalPrice) || 0
-        };
-
-        console.log("Sending Webhook Payload:", JSON.stringify(payload, null, 2));
+        // 2. Condición estricta: Solo enviar si hay productos vendidos
+        if (!soldItems || soldItems.length === 0) {
+            console.log("ℹ️ Webhook omitido: No hay productos vendidos en este service.");
+            return;
+        }
 
         try {
-            await fetch(MAKE_WEBHOOK_URL, {
+            // 3. Preparar los datos limpios (Numbers donde corresponde)
+            const productosListos = soldItems.map((i: any) => ({
+                descripcion: i.description,
+                precio: Number(i.price) || 0
+            }));
+
+            const totalCalculado = Number(job.totalPrice) || 0;
+
+            // 4. Construir el PAYLOAD EXACTO solicitado
+            const payload = {
+                dni_cliente: clientData.dni || "Sin DNI",
+                nombre_cliente: clientData.name || "Cliente Sin Nombre",
+                fecha_finalizacion: new Date().toISOString(),
+                nombre_producto: productosListos.map(p => p.descripcion).join(", "),
+                productos: productosListos,
+                total_service: totalCalculado
+            };
+
+            console.log("📦 Payload listo para enviar:", payload);
+
+            // 5. Enviar fetch con las cabeceras correctas para evitar JSON vacío
+            const response = await fetch(MAKE_WEBHOOK_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(payload),
                 mode: 'cors'
             });
-            // Silent success
+
+            if (response.ok) {
+                console.log("✅ Webhook enviado correctamente (Status 200)");
+            } else {
+                console.warn("⚠️ Webhook enviado pero el servidor respondió:", response.status);
+            }
+
         } catch (error: any) {
-            console.error("Webhook Error:", error);
-            // Silent fail - do not disturb user workflow
+            console.error("❌ Error CRÍTICO enviando Webhook:", error);
+            // No lanzamos error para no interrumpir el flujo del usuario en la UI
         }
     };
 
@@ -125,7 +150,10 @@ export default function ServiceJob() {
         }
 
         // 2. SECOND: SEND TO AUTOMATION (Optional priority)
+        // Filtramos solo los items que son categoría 'part' (productos)
         const soldProducts = job.extraItems?.filter((i: any) => i.category === 'part') || [];
+        
+        // Llamamos al webhook pasando explícitamente los productos vendidos
         await triggerMakeWebhook(soldProducts);
 
         setIsSending(false);
