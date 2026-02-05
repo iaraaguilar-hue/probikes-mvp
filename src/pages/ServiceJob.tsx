@@ -81,16 +81,18 @@ export default function ServiceJob() {
         }
 
         const payload = {
-            dni_cliente: clientData.dni || "Sin DNI",
-            nombre_cliente: clientData.name || "Cliente",
+            dni_cliente: clientData?.dni || "Sin DNI",
+            nombre_cliente: clientData?.name || "Cliente",
             fecha_finalizacion: new Date().toISOString(),
             nombre_producto: soldItems.map((i: any) => i.description).join(', '),
             productos: soldItems.map((i: any) => ({
                 descripcion: i.description,
-                precio: i.price
+                precio: Number(i.price) || 0
             })),
-            total_service: job.totalPrice
+            total_service: Number(job?.totalPrice) || 0
         };
+
+        console.log("Sending Webhook Payload:", JSON.stringify(payload, null, 2));
 
         try {
             await fetch(MAKE_WEBHOOK_URL, {
