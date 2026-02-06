@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, CheckCircle, FileText, CheckSquare, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileText, CheckSquare, Loader2, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+
 import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
 
@@ -16,68 +16,56 @@ export default function ServiceJob() {
 
     const [job, setJob] = useState<any>(null);
     const [clientData, setClientData] = useState<any>(null);
+    const [allJobsDebug, setAllJobsDebug] = useState<any[]>([]); // Para el menú de rescate
     const [bikeModel, setBikeModel] = useState('');
-    const [notes, setNotes] = useState('');
+
     const [loading, setLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
 
     useEffect(() => {
-        if (!id) return;
         try {
             const stored = localStorage.getItem('clients');
             if (stored) {
                 const clients = JSON.parse(stored);
+
+                const debugList = [];
+
+                // Búsqueda del trabajo y recolección para debug
                 for (const c of clients) {
-                    const j = c.jobs?.find((x: any) => x.id === id);
-                    if (j) {
-                        setJob(j);
-                        setClientData(c);
-                        setNotes(j.notes || '');
-                        const b = c.bikes?.find((bk: any) => bk.id === j.bikeId);
-                        setBikeModel(b ? b.model : 'Bicicleta');
-                        break;
+                    if (c.jobs) {
+                        for (const j of c.jobs) {
+                            // Guardamos todos en la lista por si acaso
+                            debugList.push({ ...j, clientName: c.name, clientId: c.id });
+
+                            // Comparación LAXA (==) para que "9" sea igual a 9
+                            if (id && (String(j.id) === String(id))) {
+                                setJob(j);
+                                setClientData(c);
+
+                                const b = c.bikes?.find((bk: any) => bk.id === j.bikeId);
+                                setBikeModel(b ? b.model : 'Bicicleta');
+
+                            }
+                        }
                     }
                 }
+                setAllJobsDebug(debugList);
             }
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     }, [id]);
 
-    const saveChanges = (updatedJob: any) => {
-        try {
-            const stored = localStorage.getItem('clients');
-            if (stored && clientData) {
-                const clients = JSON.parse(stored);
-                const updatedClients = clients.map((c: any) => {
-                    if (c.id === clientData.id) {
-                        const newJobs = c.jobs.map((j: any) => j.id === updatedJob.id ? updatedJob : j);
-                        return { ...c, jobs: newJobs };
-                    }
-                    return c;
-                });
-                localStorage.setItem('clients', JSON.stringify(updatedClients));
-                setJob(updatedJob);
-                return true;
-            }
-            return false;
-        } catch (e) { return false; }
-    };
 
-    const handleSaveNotes = () => {
-        if (!job) return;
-        saveChanges({ ...job, notes });
-        alert("Notas guardadas.");
-    };
 
-    // --- FUNCIÓN DE DIAGNÓSTICO PROFESIONAL ---
+
+
+    // --- FUNCIÓN DE DIAGNÓSTICO DEL JSON ---
     const triggerMakeWebhook = async (soldItems: any[]) => {
-        // 1. Verificar si hay items para vender
         if (!soldItems || soldItems.length === 0) {
-            alert("DIAGNÓSTICO: No se envió webhook porque no hay productos (categoría 'part') en este service.");
+            alert("⚠️ ATENCIÓN: Este service NO tiene productos (categoría 'part'). Agrega un repuesto primero para probar el JSON.");
             return;
         }
 
-        // 2. Construcción del Payload (Datos)
         const productosListos = soldItems.map((i: any) => ({
             descripcion: i.description,
             precio: Number(i.price) || 0
@@ -94,53 +82,44 @@ export default function ServiceJob() {
             total_service: totalCalculado
         };
 
-        // 3. LA PRUEBA DE LA VERDAD (Mostrar datos antes de enviar)
+        // PASO CRÍTICO: MOSTRAR DATOS ANTES DE ENVIAR
         const jsonString = JSON.stringify(payload, null, 2);
         const confirmacion = window.confirm(
-            `CONFIRMA LOS DATOS A ENVIAR:\n\n${jsonString}\n\n¿Enviar esto al Webhook?`
+            `CONFIRMA EL JSON A ENVIAR:\n\n${jsonString}\n\n¿Enviar esto a Make?`
         );
 
-        if (!confirmacion) {
-            console.log("Envío cancelado por el usuario.");
-            return;
-        }
+        if (!confirmacion) return;
+
+        setIsSending(true); // START LOADING
+
 
         try {
-            // 4. Envío Limpio (Sin modos raros, estándar HTTP POST)
             const response = await fetch(MAKE_WEBHOOK_URL, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json' 
-                    // Quitamos 'mode: cors' y 'keepalive' temporalmente para probar la respuesta directa del servidor
+                headers: {
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(payload)
             });
 
-            const responseText = await response.text();
-            
             if (response.ok) {
-                alert(`✅ ¡ÉXITO! El servidor respondió: ${responseText}`);
+                alert(`✅ ¡ENVIADO! Revisa Make ahora. Texto respuesta: ${await response.text()}`);
             } else {
-                alert(`❌ ERROR DEL SERVIDOR: Código ${response.status}\nRespuesta: ${responseText}`);
+                alert(`❌ ERROR: Código ${response.status}`);
             }
 
         } catch (error: any) {
             alert(`❌ ERROR DE RED: ${error.message}`);
-            console.error(error);
+        } finally {
+            setIsSending(false); // STOP LOADING
         }
     };
 
     const handleFinishJob = async () => {
         if (!job) return;
-        
-        // Desactivamos temporalmente el guardado local para centrarnos SOLO en el webhook
-        // (En producción descomentamos esto)
+        // Solo para probar el webhook sin cerrar
         const soldProducts = job.extraItems?.filter((i: any) => i.category === 'part') || [];
-        
         await triggerMakeWebhook(soldProducts);
-        
-        // COMENTADO INTENCIONALMENTE PARA QUE NO CIERRE LA PÁGINA
-        // navigate('/history'); 
     };
 
     const handleDownloadPDF = () => {
@@ -149,8 +128,46 @@ export default function ServiceJob() {
     };
 
     if (loading) return <div>Cargando...</div>;
-    if (!job) return <div>No encontrado</div>;
-    const isFinished = job.status === 'FINISHED' || job.status === 'Finalizado';
+
+    // --- MENÚ DE RESCATE (Si no encuentra el ID) ---
+    if (!job) {
+        return (
+            <div className="min-h-screen bg-slate-50 p-10 flex flex-col items-center">
+                <Card className="w-full max-w-2xl">
+                    <CardHeader>
+                        <CardTitle className="text-red-600 flex items-center gap-2">
+                            <Wrench className="w-6 h-6" />
+                            No encontré el ID "{id}"
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <p className="text-slate-600">
+                            Parece que el ID de la URL no coincide con ninguno en la base de datos local.
+                            Pero encontré estos <strong>{allJobsDebug.length} trabajos</strong> disponibles. Haz click en uno para entrar:
+                        </p>
+                        <div className="grid gap-2 max-h-[400px] overflow-y-auto border p-2 rounded">
+                            {allJobsDebug.map((j) => (
+                                <Button
+                                    key={j.id}
+                                    variant="outline"
+                                    className="justify-start h-auto py-3 px-4"
+                                    onClick={() => window.location.href = `/service/${j.id}`}
+                                >
+                                    <div className="text-left">
+                                        <div className="font-bold">Service #{j.id} - {j.serviceType}</div>
+                                        <div className="text-sm text-slate-500">Cliente: {j.clientName} | Total: ${j.totalPrice}</div>
+                                    </div>
+                                </Button>
+                            ))}
+                        </div>
+                        <Button onClick={() => navigate('/')} className="w-full mt-4">Volver al Inicio</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+
 
     return (
         <div className="min-h-screen bg-slate-50 p-6">
@@ -158,10 +175,9 @@ export default function ServiceJob() {
                 <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2"><ArrowLeft className="w-4 h-4" /> Volver</Button>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={handleDownloadPDF} className="gap-2 bg-white text-orange-700 border-orange-200"><FileText className="w-4 h-4" /> PDF</Button>
-                    <Button variant="outline" onClick={handleSaveNotes} className="gap-2 bg-white text-blue-700 border-blue-200"><Save className="w-4 h-4" /> Guardar Notas</Button>
-                    
-                    {/* Botón de PRUEBA DE WEBHOOK (Separado del finalizar real) */}
-                    <Button onClick={handleFinishJob} disabled={isSending} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white">
+
+                    {/* BOTÓN MORADO DE PRUEBA */}
+                    <Button onClick={handleFinishJob} disabled={isSending} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold border-2 border-purple-400">
                         {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckSquare className="w-4 h-4" />}
                         PROBAR WEBHOOK (DEBUG)
                     </Button>
@@ -196,6 +212,7 @@ export default function ServiceJob() {
                         </CardContent>
                     </Card>
                 </div>
+                <div><Card className="bg-blue-50 border-blue-200"><CardContent className="pt-6"><div className="flex justify-between items-end"><span className="font-bold text-lg">TOTAL</span><span className="text-3xl font-black text-blue-600">$ {(job.totalPrice || 0).toLocaleString('es-AR')}</span></div></CardContent></Card></div>
             </div>
         </div>
     );
