@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
 
-// WEBHOOK CONFIGURATION
+// URL DEL WEBHOOK (Verificada)
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bvpeibjono39q80kiarwcswn7cwwoa6c";
 
 export default function ServiceJob() {
@@ -43,7 +43,6 @@ export default function ServiceJob() {
         finally { setLoading(false); }
     }, [id]);
 
-    // ROBUST SAVE FUNCTION
     const saveChanges = (updatedJob: any) => {
         try {
             const stored = localStorage.getItem('clients');
@@ -61,10 +60,7 @@ export default function ServiceJob() {
                 return true;
             }
             return false;
-        } catch (e) {
-            console.error("Save failed", e);
-            return false;
-        }
+        } catch (e) { return false; }
     };
 
     const handleSaveNotes = () => {
@@ -73,91 +69,78 @@ export default function ServiceJob() {
         alert("Notas guardadas.");
     };
 
-    // --- FUNCIÓN DEL WEBHOOK CORREGIDA Y BLINDADA ---
+    // --- FUNCIÓN DE DIAGNÓSTICO PROFESIONAL ---
     const triggerMakeWebhook = async (soldItems: any[]) => {
-        console.log("🚀 Iniciando proceso de Webhook...");
-
-        // 1. Validación de seguridad: Si faltan datos críticos, abortar.
-        if (!job || !clientData) {
-            console.error("❌ Webhook abortado: Faltan datos del trabajo o del cliente.");
+        // 1. Verificar si hay items para vender
+        if (!soldItems || soldItems.length === 0) {
+            alert("DIAGNÓSTICO: No se envió webhook porque no hay productos (categoría 'part') en este service.");
             return;
         }
 
-        // 2. Condición estricta: Solo enviar si hay productos vendidos
-        if (!soldItems || soldItems.length === 0) {
-            console.log("ℹ️ Webhook omitido: No hay productos vendidos en este service.");
+        // 2. Construcción del Payload (Datos)
+        const productosListos = soldItems.map((i: any) => ({
+            descripcion: i.description,
+            precio: Number(i.price) || 0
+        }));
+
+        const totalCalculado = Number(job.totalPrice) || 0;
+
+        const payload = {
+            dni_cliente: clientData?.dni || "Sin DNI",
+            nombre_cliente: clientData?.name || "Cliente Sin Nombre",
+            fecha_finalizacion: new Date().toISOString(),
+            nombre_producto: productosListos.map(p => p.descripcion).join(", "),
+            productos: productosListos,
+            total_service: totalCalculado
+        };
+
+        // 3. LA PRUEBA DE LA VERDAD (Mostrar datos antes de enviar)
+        const jsonString = JSON.stringify(payload, null, 2);
+        const confirmacion = window.confirm(
+            `CONFIRMA LOS DATOS A ENVIAR:\n\n${jsonString}\n\n¿Enviar esto al Webhook?`
+        );
+
+        if (!confirmacion) {
+            console.log("Envío cancelado por el usuario.");
             return;
         }
 
         try {
-            // 3. Preparar los datos limpios (Numbers donde corresponde)
-            const productosListos = soldItems.map((i: any) => ({
-                descripcion: i.description,
-                precio: Number(i.price) || 0
-            }));
-
-            const totalCalculado = Number(job.totalPrice) || 0;
-
-            // 4. Construir el PAYLOAD EXACTO solicitado
-            const payload = {
-                dni_cliente: clientData.dni || "Sin DNI",
-                nombre_cliente: clientData.name || "Cliente Sin Nombre",
-                fecha_finalizacion: new Date().toISOString(),
-                nombre_producto: productosListos.map(p => p.descripcion).join(", "),
-                productos: productosListos,
-                total_service: totalCalculado
-            };
-
-            console.log("📦 Payload listo para enviar:", payload);
-
-            // 5. Enviar fetch con las cabeceras correctas para evitar JSON vacío
+            // 4. Envío Limpio (Sin modos raros, estándar HTTP POST)
             const response = await fetch(MAKE_WEBHOOK_URL, {
                 method: 'POST',
                 headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+                    'Content-Type': 'application/json' 
+                    // Quitamos 'mode: cors' y 'keepalive' temporalmente para probar la respuesta directa del servidor
                 },
-                body: JSON.stringify(payload),
-                mode: 'cors'
+                body: JSON.stringify(payload)
             });
 
+            const responseText = await response.text();
+            
             if (response.ok) {
-                console.log("✅ Webhook enviado correctamente (Status 200)");
+                alert(`✅ ¡ÉXITO! El servidor respondió: ${responseText}`);
             } else {
-                console.warn("⚠️ Webhook enviado pero el servidor respondió:", response.status);
+                alert(`❌ ERROR DEL SERVIDOR: Código ${response.status}\nRespuesta: ${responseText}`);
             }
 
         } catch (error: any) {
-            console.error("❌ Error CRÍTICO enviando Webhook:", error);
-            // No lanzamos error para no interrumpir el flujo del usuario en la UI
+            alert(`❌ ERROR DE RED: ${error.message}`);
+            console.error(error);
         }
     };
 
     const handleFinishJob = async () => {
         if (!job) return;
-        if (!window.confirm("¿Confirmar que el service está terminado?")) return;
-
-        setIsSending(true);
-
-        // 1. FIRST: SAVE TO DATABASE (Critical priority)
-        const updated = { ...job, status: 'FINISHED' };
-        const saved = saveChanges(updated);
-
-        if (!saved) {
-            setIsSending(false);
-            alert("Error crítico: No se pudo guardar en la base de datos.");
-            return;
-        }
-
-        // 2. SECOND: SEND TO AUTOMATION (Optional priority)
-        // Filtramos solo los items que son categoría 'part' (productos)
+        
+        // Desactivamos temporalmente el guardado local para centrarnos SOLO en el webhook
+        // (En producción descomentamos esto)
         const soldProducts = job.extraItems?.filter((i: any) => i.category === 'part') || [];
         
-        // Llamamos al webhook pasando explícitamente los productos vendidos
         await triggerMakeWebhook(soldProducts);
-
-        setIsSending(false);
-        navigate('/history');
+        
+        // COMENTADO INTENCIONALMENTE PARA QUE NO CIERRE LA PÁGINA
+        // navigate('/history'); 
     };
 
     const handleDownloadPDF = () => {
@@ -176,14 +159,12 @@ export default function ServiceJob() {
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={handleDownloadPDF} className="gap-2 bg-white text-orange-700 border-orange-200"><FileText className="w-4 h-4" /> PDF</Button>
                     <Button variant="outline" onClick={handleSaveNotes} className="gap-2 bg-white text-blue-700 border-blue-200"><Save className="w-4 h-4" /> Guardar Notas</Button>
-                    {!isFinished ? (
-                        <Button onClick={handleFinishJob} disabled={isSending} className="gap-2 bg-green-600 hover:bg-green-700">
-                            {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckSquare className="w-4 h-4" />}
-                            Finalizar Service
-                        </Button>
-                    ) : (
-                        <Badge className="bg-green-100 text-green-800 border-green-200 px-4 py-2"><CheckCircle className="w-4 h-4 mr-2" /> Finalizado</Badge>
-                    )}
+                    
+                    {/* Botón de PRUEBA DE WEBHOOK (Separado del finalizar real) */}
+                    <Button onClick={handleFinishJob} disabled={isSending} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white">
+                        {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckSquare className="w-4 h-4" />}
+                        PROBAR WEBHOOK (DEBUG)
+                    </Button>
                 </div>
             </div>
 
@@ -212,11 +193,9 @@ export default function ServiceJob() {
                                     ))}
                                 </div>
                             </div>
-                            <div><h3 className="font-semibold mb-2">Notas</h3><Textarea value={notes} onChange={e => setNotes(e.target.value)} /></div>
                         </CardContent>
                     </Card>
                 </div>
-                <div><Card className="bg-blue-50 border-blue-200"><CardContent className="pt-6"><div className="flex justify-between items-end"><span className="font-bold text-lg">TOTAL</span><span className="text-3xl font-black text-blue-600">$ {(job.totalPrice || 0).toLocaleString('es-AR')}</span></div></CardContent></Card></div>
             </div>
         </div>
     );
