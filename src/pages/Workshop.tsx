@@ -310,6 +310,36 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                 }
             }
 
+            // --- LOGICA WEBHOOK ---
+            const soldProducts = service.extraItems?.filter((i: any) => i.category === 'part') || [];
+
+            if (soldProducts.length > 0) {
+                try {
+                    const bikeForWebhook = await getBike(service.bike_id);
+                    const clientForWebhook = await getClient(bikeForWebhook.client_id);
+
+                    const payload = {
+                        dni_cliente: clientForWebhook.dni || "Sin DNI",
+                        nombre_cliente: clientForWebhook.name || "Cliente",
+                        fecha_finalizacion: new Date().toISOString(),
+                        nombre_producto: soldProducts.map((p: any) => p.description).join(", "),
+                        productos: soldProducts.map((p: any) => ({ descripcion: p.description, precio: Number(p.price) || 0 })),
+                        total_service: Number(service.totalPrice) || 0
+                    };
+
+                    // Fetch con KEEPALIVE
+                    fetch("https://hook.us2.make.com/bvpeibjono39q80kiarwcswn7cwwoa6c", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                        keepalive: true
+                    }).catch(e => console.error("Webhook Error:", e));
+                } catch (err) {
+                    console.error("Error en Webhook:", err);
+                }
+            }
+            // ---------------------
+
             // 4. Complete ONLY if not already completed
             const currentStatus = service.status.toLowerCase();
             if (currentStatus !== "completed" && currentStatus !== "delivered") {
