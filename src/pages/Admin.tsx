@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Calendar } from "lucide-react";
+import { MessageSquare, Settings } from "lucide-react";
 
 interface RetentionItem {
     wear_id: number;
@@ -27,9 +27,10 @@ export default function Admin() {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-white flex items-center">
-                <Calendar className="mr-3" /> Motor de Retención
-            </h2>
+            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                <Settings className="h-8 w-8 text-sky-500" />
+                Configuración
+            </h1>
             <p className="text-muted-foreground">Clientes con componentes vencidos o próximos a vencer (Hoy).</p>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

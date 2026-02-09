@@ -13,9 +13,10 @@ interface AddBikeDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onBikeCreated: (bike: Bike) => void;
+    isRapidIntake?: boolean;
 }
 
-export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCreated }: AddBikeDialogProps) {
+export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCreated, isRapidIntake = false }: AddBikeDialogProps) {
     const [formData, setFormData] = useState({
         brand: "",
         model: "",
@@ -66,7 +67,7 @@ export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCre
                 </div>
                 <DialogFooter>
                     <Button onClick={handleSubmit} disabled={mutation.isPending}>
-                        {mutation.isPending ? "Guardando..." : "Guardar Bici y Seguir"}
+                        {mutation.isPending ? "Guardando..." : (isRapidIntake ? "Guardar y Nuevo Service" : "Guardar Bici y Seguir")}
                     </Button>
                 </DialogFooter>
             </DialogContent>

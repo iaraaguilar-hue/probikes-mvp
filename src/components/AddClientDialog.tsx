@@ -12,10 +12,17 @@ import { UserPlus, Plus } from "lucide-react";
 interface AddClientDialogProps {
     onClientCreated: (client: Client) => void;
     variant?: "default" | "outline" | "secondary";
+    trigger?: React.ReactNode;
+    isOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    isRapidIntake?: boolean;
 }
 
-export function AddClientDialog({ onClientCreated, variant = "default" }: AddClientDialogProps) {
-    const [open, setOpen] = useState(false);
+export function AddClientDialog({ onClientCreated, variant = "default", trigger, isOpen, onOpenChange, isRapidIntake = false }: AddClientDialogProps) {
+    const [internalOpen, setInternalOpen] = useState(false);
+    const isControlled = isOpen !== undefined;
+    const open = isControlled ? isOpen : internalOpen;
+    const setOpen = isControlled ? (onOpenChange || (() => { })) : setInternalOpen;
     const [formData, setFormData] = useState<{
         name: string;
         dni: string;
@@ -42,9 +49,10 @@ export function AddClientDialog({ onClientCreated, variant = "default" }: AddCli
             queryClient.invalidateQueries({ queryKey: ["fleet"] });
             queryClient.invalidateQueries({ queryKey: ["clients"] });
 
-            // Mandatory Redirect to Client/Garage Page to chain workflows
-            // "Create Client" -> "Add Bike" -> "Start Service"
-            navigate(`/clients/${data.id}`);
+            // Rapid Intake: Skip redirect, parent handles next step
+            if (!isRapidIntake) {
+                navigate(`/clients/${data.id}`);
+            }
         },
         onError: () => alert("Error Create Client")
     });
@@ -57,9 +65,11 @@ export function AddClientDialog({ onClientCreated, variant = "default" }: AddCli
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant={variant} size={variant === 'default' ? "default" : "default"} className={variant === 'default' ? "h-12 w-12 p-0 rounded-full" : "w-full"}>
-                    {variant === 'default' ? <UserPlus className="h-6 w-6" /> : <><Plus className="mr-2 h-4 w-4" /> Crear Nuevo Cliente</>}
-                </Button>
+                {trigger ? trigger : (
+                    <Button variant={variant} size={variant === 'default' ? "default" : "default"} className={variant === 'default' ? "h-12 w-12 p-0 rounded-full" : "w-full"}>
+                        {variant === 'default' ? <UserPlus className="h-6 w-6" /> : <><Plus className="mr-2 h-4 w-4" /> Crear Nuevo Cliente</>}
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>

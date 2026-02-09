@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Phone, Calendar, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing } from "lucide-react";
 
 export default function RetentionEngine() {
     const { data: alerts, isLoading } = useQuery({
@@ -25,8 +25,11 @@ export default function RetentionEngine() {
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900">Motor de Retención</h1>
-                <p className="text-muted-foreground">Gestiona los vencimientos de componentes y genera re-compras.</p>
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
+                    <BellRing className="w-8 h-8 text-sky-500" />
+                    Motor de Retención
+                </h1>
+                <p className="text-muted-foreground mt-1">Gestiona los vencimientos de componentes y genera re-compras.</p>
             </div>
 
             {/* Empty State */}

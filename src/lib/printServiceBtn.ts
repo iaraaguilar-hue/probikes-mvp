@@ -69,26 +69,36 @@ export const printServiceReport = (
 
   const basePrice = Number(job.basePrice) || 0;
   const extraItems = job.extraItems || [];
-  const invoiceRows: any[] = [];
+
 
   // Build Rows
+  const laborRows: any[] = [];
+  const productRows: any[] = [];
+
+  // --- 1. LABOR (Mano de Obra) ---
   // Header Row
-  invoiceRows.push({ description: `SERVICE ${serviceType}`, price: basePrice, isHeader: true });
+  laborRows.push({ description: `SERVICE ${serviceType}`, price: basePrice, isHeader: true });
 
   // Task Rows (Breakdown)
   serviceTasks.forEach(task => {
     // Detect Header vs Item
     if (task.trim().endsWith(':')) {
-      invoiceRows.push({ description: task, isTaskHeader: true });
+      laborRows.push({ description: task, isTaskHeader: true });
     } else {
       // Clean up bullet if present for consistent rendering
       const cleanTask = task.replace(/^[-•]\s*/, '');
-      invoiceRows.push({ description: cleanTask, isTask: true, isMainBullet: task.includes('•') });
+      laborRows.push({ description: cleanTask, isTask: true, isMainBullet: task.includes('•') });
     }
   });
 
-  // Extra Items
-  extraItems.forEach((item: any) => invoiceRows.push({ description: item.description, price: Number(item.price) || 0, isExtra: true }));
+  // --- 2. PRODUCTS (Repuestos) ---
+  extraItems.forEach((item: any) => {
+    productRows.push({
+      description: item.description,
+      price: Number(item.price) || 0,
+      isProduct: true
+    });
+  });
 
   const grandTotal = basePrice + extraItems.reduce((acc: number, item: any) => acc + (Number(item.price) || 0), 0);
   const dateStr = new Date().toLocaleDateString('es-AR');
@@ -124,34 +134,51 @@ export const printServiceReport = (
         </div>
       </div>
 
+      <!-- SECTION 1: MANO DE OBRA -->
+      <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+        <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
+      </div>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-        <thead>
-          <tr>
-            <th style="text-align: left; padding: 8px 0; border-bottom: 1px solid #ddd; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999;">Descripción</th>
-            <th style="text-align: right; padding: 8px 0; border-bottom: 1px solid #ddd; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999;">Precio</th>
-          </tr>
-        </thead>
         <tbody>
-          ${invoiceRows.map(row => {
+          ${laborRows.map(row => {
     const price = row.price > 0 ? `$ ${row.price.toLocaleString('es-AR')}` : '';
+
     if (row.isHeader) {
-      return `<tr><td style="padding: 12px 0 4px 0; font-weight: 700; font-size: 14px; color: #f97316;">${row.description}</td><td style="padding: 12px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">${price}</td></tr>`;
+      // Main Service Title (e.g. SERVICE SPORT)
+      return `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">${row.description}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">${price}</td></tr>`;
     }
     if (row.isTaskHeader) {
-      // SUB-HEADER (e.g. TRANSMISIÓN:)
-      return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #444; text-transform: uppercase;">${row.description}</td><td></td></tr>`;
+      // Sub-category (e.g. TRANSMISIÓN:)
+      return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #555; text-transform: uppercase;">${row.description}</td><td></td></tr>`;
     }
     if (row.isTask) {
-      // Indented, bulleted, smaller gray text
-      // Main bullet (Lavado) vs Sub-item (-)
+      // Specific task item
       const padding = row.isMainBullet ? "5px 0 5px 0" : "1px 0 1px 15px";
       const weight = row.isMainBullet ? "600" : "400";
       return `<tr><td style="padding: ${padding}; font-size: 11px; color: #666; font-weight: ${weight}; line-height: 1.4;">• ${row.description}</td><td></td></tr>`;
     }
-    return `<tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; color: #444;">${row.description}</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 14px;">${price}</td></tr>`;
+    return '';
   }).join('')}
         </tbody>
       </table>
+
+      <!-- SECTION 2: PRODUCTOS (Only if exists) -->
+      ${productRows.length > 0 ? `
+        <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 20px;">
+            <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">REPUESTOS E INSUMOS</span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <tbody>
+            ${productRows.map(row => {
+    const price = row.price > 0 ? `$ ${row.price.toLocaleString('es-AR')}` : '';
+    return `<tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #444;">${row.description}</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 12px;">${price}</td>
+                </tr>`;
+  }).join('')}
+            </tbody>
+        </table>
+      ` : ''}
 
       <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #333;">
          <div style="font-size: 30px; font-weight: 900; color: #333;">$ ${grandTotal.toLocaleString('es-AR')}</div>

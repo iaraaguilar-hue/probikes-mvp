@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Wrench, AlertTriangle, CheckCircle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon } from "lucide-react";
+import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
@@ -490,21 +490,7 @@ export default function BikeDetail() {
                                                         </div>
                                                     </AccordionTrigger>
                                                     <AccordionContent className="pt-2 pb-4 border-t mt-2">
-                                                        <div className="grid md:grid-cols-2 gap-4">
-                                                            <div>
-                                                                <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase text-xs tracking-wider">Tareas Realizadas</h4>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {service.checklist_data && Object.keys(service.checklist_data).length > 0 ? (
-                                                                        Object.keys(service.checklist_data).map(task => (
-                                                                            <Badge key={task} variant="secondary" className="font-normal text-slate-600 bg-slate-100 border-slate-200">
-                                                                                <CheckCircle className="h-3 w-3 mr-1 text-green-500" /> {task}
-                                                                            </Badge>
-                                                                        ))
-                                                                    ) : (
-                                                                        <span className="text-sm text-muted-foreground italic">N/A</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
+                                                        <div className="space-y-3">
 
                                                             <div className="space-y-3">
 
@@ -575,8 +561,8 @@ export default function BikeDetail() {
                                                                 className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    if (bike && client) {
-                                                                        printServiceReport(service, client.name, bike.model, client.dni || '', client.phone || '');
+                                                                    if (activeBike && client) {
+                                                                        printServiceReport(service, client.name, activeBike.model, client.dni || '', client.phone || '');
                                                                     }
                                                                 }}
                                                             >

@@ -9,9 +9,10 @@ import BikeDetail from "./pages/BikeDetail";
 import HistoryPage from "./pages/History";
 import Admin from "./pages/Admin";
 import RetentionEngine from "./pages/RetentionEngine";
-import LoginScreen from "./pages/LoginScreen"; // [NEW]
+import LoginScreen from "./pages/LoginScreen";
+import Metrics from "./pages/Metrics"; // [NEW]
 import { Button } from "@/components/ui/button";
-import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut } from "lucide-react";
+import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -69,9 +70,9 @@ function App() {
         <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
 
           {/* Sidebar / Navigation */}
-          <nav className="w-full md:w-20 border-r border-border bg-card flex md:flex-col items-center py-4 space-x-4 md:space-x-0 md:space-y-8 sticky top-0 z-10 h-16 md:h-screen justify-center md:justify-start">
-            <div className="hidden md:block mb-4 text-center">
-              <img src="/img/logo_icon.png" alt="ProBikes" className="h-12 w-auto mx-auto" />
+          <nav className="w-full md:w-28 border-r border-border bg-card flex md:flex-col items-center py-4 space-x-4 md:space-x-0 md:space-y-8 sticky top-0 z-10 h-16 md:h-screen justify-center md:justify-start">
+            <div className="hidden md:block mb-6 text-center w-full px-2">
+              <img src="/img/logo_icon.png" alt="ProBikes" className="h-24 w-auto mx-auto object-contain transition-all duration-300 hover:scale-110" />
               {currentUser && <div className="text-[10px] text-muted-foreground mt-1 font-mono uppercase tracking-widest">{currentUser}</div>}
             </div>
 
@@ -90,6 +91,9 @@ function App() {
               </Link>
               <Link to="/reminders">
                 <NavButton icon={<Bell />} label="Motor Retención" />
+              </Link>
+              <Link to="/metrics">
+                <NavButton icon={<BarChart3 />} label="Métricas" />
               </Link>
               <Link to="/admin">
                 <NavButton icon={<Settings />} label="Admin" />
@@ -121,6 +125,7 @@ function App() {
               <Route path="/bikes/:id" element={<BikeDetail />} />
               <Route path="/clients/:clientId" element={<BikeDetail />} />
               <Route path="/service/:id" element={<ServiceJob />} />
+              <Route path="/metrics" element={<Metrics />} />
               <Route path="/admin" element={<Admin />} />
             </Routes>
           </main>

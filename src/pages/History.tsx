@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Eye, Download, Upload, CheckCircle, ChevronUp, ExternalLink } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { FileText, Eye, Download, Upload, ChevronUp, Pencil, Trash2, ClipboardList } from 'lucide-react';
 import { printServiceReport } from '@/lib/printServiceBtn';
+import { deleteService } from '@/lib/api';
+import { ServiceModal } from '@/components/ServiceModal';
 
 // Interface definitions...
 interface Client { id: number; name: string; dni?: string; phone: string; }
@@ -24,6 +25,7 @@ export default function History() {
     const [allJobs, setAllJobs] = useState<any[]>([]);
     const [debugStats, setDebugStats] = useState("");
     const [expandedIds, setExpandedIds] = useState<number[]>([]);
+    const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -34,6 +36,18 @@ export default function History() {
         setExpandedIds(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
         );
+    };
+
+
+    const handleDelete = async (id: number) => {
+        if (confirm("¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.")) {
+            try {
+                await deleteService(id);
+                loadData(); // Refresh list
+            } catch (e) {
+                alert("Error al eliminar servicio");
+            }
+        }
     };
 
     const loadData = () => {
@@ -127,7 +141,10 @@ export default function History() {
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Historial Completo</h1>
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                        <ClipboardList className="h-8 w-8 text-sky-500" />
+                        Historial de Trabajos
+                    </h1>
                     <p className="text-xs text-muted-foreground font-mono mt-1">{debugStats}</p>
                 </div>
                 <div className="flex gap-2">
@@ -177,9 +194,15 @@ export default function History() {
                                                 <Button variant="ghost" size="icon" title="Imprimir" onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}>
                                                     <FileText className="w-4 h-4 text-orange-600" />
                                                 </Button>
-                                                {/* Toggle Expand Button (Previously Eye Link) */}
+                                                {/* Toggle Expand Button */}
                                                 <Button variant="ghost" size="icon" title="Ver Detalles" onClick={() => toggleExpand(job.id)}>
-                                                    {isExpanded ? <ChevronUp className="w-4 h-4 text-blue-600" /> : <Eye className="w-4 h-4 text-gray-500" />}
+                                                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <Eye className="w-4 h-4 text-gray-500" />}
+                                                </Button>
+                                                <Button variant="ghost" size="icon" title="Editar" onClick={() => setEditingServiceId(job.id)}>
+                                                    <Pencil className="w-4 h-4 text-blue-600" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" title="Eliminar" onClick={() => handleDelete(job.id)}>
+                                                    <Trash2 className="w-4 h-4 text-red-600" />
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -207,6 +230,21 @@ export default function History() {
                     </Table>
                 </CardContent>
             </Card>
+
+
+            {
+                editingServiceId && (
+                    <ServiceModal
+                        isOpen={!!editingServiceId}
+                        onClose={() => setEditingServiceId(null)}
+                        preSelectedServiceId={editingServiceId}
+                        onSuccess={() => {
+                            setEditingServiceId(null);
+                            loadData();
+                        }}
+                    />
+                )
+            }
         </div>
     );
 }
@@ -228,31 +266,11 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                     </h3>
                     <p className="text-sm text-slate-500">Service realizado a <strong>{job.bikeModel}</strong></p>
                 </div>
-                <Link to={`/service/${job.id}`}>
-                    <Button variant="outline" size="sm" className="gap-1 text-xs">
-                        <ExternalLink className="w-3 h-3" /> Ver Service Completo
-                    </Button>
-                </Link>
+
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8">
-                {/* LEFT COL: Checklist */}
-                <div>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Tareas Realizadas</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {service.checklist_data && Object.keys(service.checklist_data).length > 0 ? (
-                            Object.keys(service.checklist_data).map(task => (
-                                <Badge key={task} variant="secondary" className="font-normal text-slate-600 bg-slate-100 border-slate-200 py-1.5 px-3">
-                                    <CheckCircle className="h-3 w-3 mr-1.5 text-green-500" /> {task}
-                                </Badge>
-                            ))
-                        ) : (
-                            <span className="text-sm text-muted-foreground italic">N/A</span>
-                        )}
-                    </div>
-                </div>
-
-                {/* RIGHT COL: Costs */}
+            <div className="space-y-4">
+                {/* Costs and Details taking full width */}
                 <div className="space-y-4">
                     <div>
                         <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Detalle de Costos</h4>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getFleetStatus, deleteClient, type FleetItem } from "@/lib/api";
+import { RapidIntakeWizard } from "@/components/RapidIntakeWizard";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, PlusCircle, Trash2, Clock, CheckCircle } from "lucide-react";
@@ -71,11 +72,14 @@ export default function Home() {
 
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-medium text-slate-600">Base de Datos de Flota y Clientes</h2>
-                <Link to="/reception">
-                    <Button className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-6">
-                        <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
-                    </Button>
-                </Link>
+                <RapidIntakeWizard
+                    onComplete={() => refetch()}
+                    trigger={
+                        <Button className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-6">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
+                        </Button>
+                    }
+                />
             </div>
 
             {/* Grid */}

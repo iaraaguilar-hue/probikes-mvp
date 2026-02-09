@@ -291,6 +291,14 @@ export const getDashboardHistory = async (): Promise<DashboardJob[]> => {
     return jobs;
 };
 
+export const getFullHistory = async () => {
+    const db = getDB();
+    // Return full service objects for advanced analysis
+    return db.services.filter(s =>
+        ["Completed", "Finalizado", "Entregado"].includes(s.status)
+    );
+};
+
 // Migration for Sequential IDs
 export const migrateServiceIds = () => {
     const db = getDB();
@@ -416,6 +424,16 @@ export const updateService = async (serviceId: number, data: Partial<ServiceReco
         return db.services[index];
     }
     throw new Error("Service not found");
+};
+
+export const deleteService = async (serviceId: number) => {
+    const db = getDB();
+    const index = db.services.findIndex(s => s.id === serviceId);
+    if (index === -1) throw new Error("Service not found");
+
+    db.services.splice(index, 1);
+    saveDB(db);
+    return true;
 };
 
 export const getService = async (serviceId: number) => {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ServiceModal } from "@/components/ServiceModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wrench, Search, History } from "lucide-react";
+import { Wrench, Search, History, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Reception() {
@@ -10,8 +10,9 @@ export default function Reception() {
     return (
         <div className="max-w-4xl mx-auto space-y-12 py-10">
             <div className="text-center space-y-4">
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 lg:text-5xl">
-                    MechanicPro <span className="text-primary">Recepción</span>
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 lg:text-5xl flex items-center justify-center gap-3">
+                    <UserPlus className="h-8 w-8 text-sky-500" />
+                    Recepción de Clientes
                 </h1>
                 <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                     Gestión eficiente de ingresos. Todo comienza con un nuevo service.

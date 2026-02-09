@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDashboardJobs, updateServiceStatus, updateService, getService, getBike, getClient, createReminders, type DashboardJob, type ServiceRecord, type Reminder } from "@/lib/api";
 import { printServiceReport } from "@/lib/printServiceBtn";
@@ -29,38 +29,37 @@ export default function Workshop() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-[#00adf7] text-white p-6 rounded-lg shadow-md">
-                <div className="flex items-center space-x-4">
-                    <div className="bg-white/20 p-3 rounded-full">
-                        <Wrench className="h-8 w-8 text-white" />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <h2 className="text-3xl font-bold tracking-tight">Taller Activo</h2>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-white hover:bg-white/20 hover:text-white"
-                                onClick={() => refetch()}
-                                title="Recargar datos"
-                            >
-                                <RefreshCcw className={`h-5 w-5 ${isRefetching ? "animate-spin" : ""}`} />
-                            </Button>
-                        </div>
-                        <p className="text-blue-100">Gestión de trabajos en curso</p>
-                    </div>
+
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                        <Wrench className="h-8 w-8 text-sky-500" />
+                        Taller Activo
+                    </h1>
+                    <p className="text-muted-foreground mt-1">Gestión de trabajos en curso.</p>
                 </div>
-                <div className="flex gap-4">
-                    <Card className="bg-white/10 border-none shadow-none text-white">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className="text-right">
-                                <p className="text-xs font-bold text-blue-100 uppercase">En Proceso</p>
-                                <p className="text-2xl font-black">{jobs?.length || 0}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => refetch()}
+                    title="Recargar datos"
+                    className="shrink-0"
+                >
+                    <RefreshCcw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+                </Button>
             </div>
+
+            <div className="flex gap-4">
+                <Card className="bg-white/10 border-none shadow-none text-white">
+                    <CardContent className="p-4 flex items-center gap-3">
+                        <div className="text-right">
+                            <p className="text-xs font-bold text-blue-100 uppercase">En Proceso</p>
+                            <p className="text-2xl font-black">{jobs?.length || 0}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
 
             <div className="rounded-md border bg-card">
                 <Table>
@@ -101,23 +100,27 @@ export default function Workshop() {
                 </Table>
             </div>
 
-            {editingJob && (
-                <ServiceModal
-                    isOpen={!!editingJob}
-                    onClose={() => setEditingJob(null)}
-                    preSelectedServiceId={editingJob.service_id}
-                    onSuccess={() => { }}
-                />
-            )}
+            {
+                editingJob && (
+                    <ServiceModal
+                        isOpen={!!editingJob}
+                        onClose={() => setEditingJob(null)}
+                        preSelectedServiceId={editingJob.service_id}
+                        onSuccess={() => { }}
+                    />
+                )
+            }
 
-            {finalizingJob && (
-                <FinalizeJobDialog
-                    job={finalizingJob}
-                    isOpen={!!finalizingJob}
-                    onClose={() => setFinalizingJob(null)}
-                />
-            )}
-        </div>
+            {
+                finalizingJob && (
+                    <FinalizeJobDialog
+                        job={finalizingJob}
+                        isOpen={!!finalizingJob}
+                        onClose={() => setFinalizingJob(null)}
+                    />
+                )
+            }
+        </div >
     );
 }
 
@@ -207,7 +210,6 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
 
 function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen: boolean, onClose: () => void }) {
     const [service, setService] = useState<ServiceRecord | null>(null);
-    const [checklist, setChecklist] = useState<Record<string, boolean>>({});
     const [notes, setNotes] = useState("");
     const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
 
@@ -220,37 +222,6 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
             const data = await getService(job.service_id);
             setService(data);
             setNotes(data.mechanic_notes || "");
-
-            // Smart Auto-Check Logic
-            let initialChecklist = data.checklist_data || {};
-            const smartChecklist: Record<string, boolean> = {};
-
-            // 1. If we have saved data, use it.
-            if (Object.keys(initialChecklist).length > 0) {
-                Object.keys(initialChecklist).forEach(key => {
-                    smartChecklist[key] = true;
-                });
-            }
-            // 2. If empty (first time finalizing), Auto-Inject based on Type
-            else {
-                let autoTasks: string[] = [];
-                const type = data.service_type;
-
-                if (type === "Sport") {
-                    autoTasks = ["Lavado Eco", "Lubricación de Transmisión", "Regulación de Cambios", "Control de Frenos"];
-                } else if (type === "Expert") {
-                    autoTasks = ["Lavado Premium", "Desarme de Transmisión", "Limpieza Profunda", "Engrase de Caja/Juego de Dirección", "Centrado de Ruedas"];
-                } else {
-                    // "Other": Use initial note/description as the task
-                    // We treat the *initial* mechanic_notes as the description if available, otherwise generic.
-                    const desc = data.mechanic_notes ? data.mechanic_notes.split('\n')[0] : "Servicio General / A Medida";
-                    autoTasks = [desc]; // Single task describing the custom job
-                }
-
-                autoTasks.forEach(t => smartChecklist[t] = true);
-            }
-
-            setChecklist(smartChecklist);
             return data;
         },
         enabled: isOpen
@@ -260,30 +231,12 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
         mutationFn: async () => {
             if (!service) return;
 
-            // 1. Capture State & Force Auto-Tasks (Hardcoded Rule)
+            // 1. Capture State
             const currentNotes = notes;
-            const serviceType = job.service_type; // or service.service_type
 
-            let finalTasks: string[] = [];
-
-            if (serviceType === 'Sport') { // Case sensitive check from api.ts ServiceType
-                finalTasks = ["Lavado Eco", "Lubricación de Transmisión", "Regulación de Cambios", "Control de Frenos"];
-            } else if (serviceType === 'Expert') {
-                finalTasks = ["Lavado Premium", "Desarme de Transmisión", "Limpieza Profunda", "Engrase de Caja", "Centrado de Ruedas"];
-            } else {
-                // For 'Other', use the initial description (first line of old notes) or generic
-                // We use the *original* service.mechanic_notes as the "initial description" source
-                const initialDescription = service.mechanic_notes ? service.mechanic_notes.split('\n')[0] : "";
-                finalTasks = [initialDescription || "Service General"];
-            }
-
-            // Convert array to checklist object
-            const finalChecklist: Record<string, boolean> = {};
-            finalTasks.forEach(t => { finalChecklist[t] = true; });
-
-            // 2. Update Details with FORCED data
+            // 2. Update Details (Clear checklist_data)
             await updateService(job.service_id, {
-                checklist_data: finalChecklist,
+                checklist_data: {},
                 mechanic_notes: currentNotes,
                 // Don't overwrite parts_used, let it persist from Edit Mode or stay null.
             });
@@ -385,24 +338,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                 </DialogHeader>
 
                 <div className="grid gap-6 py-4">
-                    {/* Checklist */}
-                    <div className="space-y-3">
-                        <Label className="text-base font-semibold">Checklist de Tareas (Control de Calidad)</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {Object.entries(checklist).map(([task, done]) => (
-                                <div key={task} className="flex items-center space-x-2 border p-2 rounded hover:bg-muted/50">
-                                    <Checkbox
-                                        id={task}
-                                        checked={done}
-                                        onCheckedChange={(checked) => setChecklist(prev => ({ ...prev, [task]: !!checked }))}
-                                    />
-                                    <label htmlFor={task} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
-                                        {task}
-                                    </label>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+
 
                     {/* Inputs */}
                     <div className="grid gap-4 md:grid-cols-2">
