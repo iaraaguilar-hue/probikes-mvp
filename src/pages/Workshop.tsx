@@ -49,12 +49,12 @@ export default function Workshop() {
                 </Button>
             </div>
 
-            <div className="flex gap-4">
-                <Card className="bg-white/10 border-none shadow-none text-white">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="text-right">
-                            <p className="text-xs font-bold text-blue-100 uppercase">En Proceso</p>
-                            <p className="text-2xl font-black">{jobs?.length || 0}</p>
+            <div className="w-full">
+                <Card className="bg-[#00adf7] border-none shadow-md text-white w-full">
+                    <CardContent className="p-6 flex flex-col gap-1">
+                        <p className="text-xs font-bold text-white/90 uppercase tracking-widest">En Proceso</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-4xl font-black">{jobs?.length || 0}</p>
                         </div>
                     </CardContent>
                 </Card>
