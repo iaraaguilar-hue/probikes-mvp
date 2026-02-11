@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle } from "lucide-react";
+import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle, Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
@@ -127,6 +127,7 @@ export default function BikeDetail() {
     const [editName, setEditName] = useState("");
     const [editPhone, setEditPhone] = useState("");
     const [editEmail, setEditEmail] = useState("");
+    const [editDni, setEditDni] = useState("");
 
     // Bike State
     const [editBrand, setEditBrand] = useState("");
@@ -144,7 +145,8 @@ export default function BikeDetail() {
                     name: editName,
                     phone: editPhone,
                     // @ts-ignore
-                    email: editEmail
+                    email: editEmail,
+                    dni: editDni
                 });
             }
             // 2. Update Bike (Only if we have one explicitly editing or context)
@@ -191,6 +193,7 @@ export default function BikeDetail() {
             setEditName(client.name);
             setEditPhone(client.phone);
             setEditEmail(client.email || "");
+            setEditDni(client.dni || "");
 
             // Reset Garage Tab Logic
             setEditingBikeId(null);
@@ -253,6 +256,9 @@ export default function BikeDetail() {
                         <div>
                             <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                                 {client?.name}
+                                <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-slate-400 hover:text-blue-600 self-center" onClick={handleEditClick}>
+                                    <Info className="h-7 w-7" />
+                                </Button>
                             </h1>
                             <div className="flex items-center gap-3 mt-1 text-muted-foreground">
                                 <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded text-sm">
@@ -261,9 +267,6 @@ export default function BikeDetail() {
                                 <span className="flex items-center gap-1">
                                     Total Services: <span className="font-bold text-slate-900">{clientTotalServices}</span>
                                 </span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-2" onClick={handleEditClick}>
-                                    <Pencil className="h-3 w-3" />
-                                </Button>
                             </div>
                         </div>
 
@@ -346,38 +349,21 @@ export default function BikeDetail() {
                                     // ---- Dynamic Health Logic ----
                                     let calculatedHealth: number;
 
-                                    // 1. If we have assigned_date (New Logic)
-                                    if (reminder.assigned_date) {
-                                        const assignedDate = new Date(reminder.assigned_date);
-                                        const totalDurationValues = dueDate.getTime() - assignedDate.getTime();
-                                        const elapsed = now.getTime() - assignedDate.getTime();
+                                    // ---- Dynamic Health Logic (Fixed 1 Year Standard) ----
+                                    // Per user request: 
+                                    // 100% = 1 Year or more remaining
+                                    // 50% = 6 Months remaining
+                                    // 0% = 0 Days remaining (Overdue)
 
-                                        // Edge Case: If assigned today (or future somehow), 100%
-                                        if (elapsed <= 0) {
-                                            calculatedHealth = 100;
-                                        } else if (now > dueDate) {
-                                            calculatedHealth = 0;
-                                        } else {
-                                            // Standard Decay
-                                            const percentConsumed = (elapsed / totalDurationValues) * 100;
-                                            calculatedHealth = Math.max(0, 100 - percentConsumed);
-                                        }
-                                    }
-                                    // 2. Fallback (Retroactive / Safety)
-                                    else {
-                                        // Prefer existing static health if available
-                                        if (reminder.current_health !== undefined) {
-                                            calculatedHealth = reminder.current_health;
-                                        } else {
-                                            // Absolute fallback: Assume 90 day standard duration ending on due date
-                                            const assumedDuration = 90 * 24 * 60 * 60 * 1000; // 90 days in ms
-                                            const timeLeft = dueDate.getTime() - now.getTime();
+                                    const timeRemaining = dueDate.getTime() - now.getTime();
+                                    const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-                                            if (timeLeft <= 0) calculatedHealth = 0;
-                                            else {
-                                                calculatedHealth = Math.min(100, (timeLeft / assumedDuration) * 100);
-                                            }
-                                        }
+                                    if (timeRemaining <= 0) {
+                                        calculatedHealth = 0;
+                                    } else {
+                                        // Calculate percentage based on 1 year lifespan standard
+                                        // If timeRemaining >= 1 year, result is >= 100, capped at 100.
+                                        calculatedHealth = Math.min(100, (timeRemaining / ONE_YEAR_MS) * 100);
                                     }
 
                                     // Visualize integer percent
@@ -617,6 +603,10 @@ export default function BikeDetail() {
                             <div className="space-y-1">
                                 <Label htmlFor="name">Nombre Completo</Label>
                                 <Input id="name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="dni">DNI</Label>
+                                <Input id="dni" value={editDni} onChange={(e) => setEditDni(e.target.value)} placeholder="Sin puntos" />
                             </div>
                             <div className="space-y-1">
                                 <Label htmlFor="phone">Teléfono</Label>

@@ -73,6 +73,7 @@ export const printServiceReport = (
 
   // Build Rows
   const laborRows: any[] = [];
+  const extraLaborRows: any[] = [];
   const productRows: any[] = [];
 
   // --- 1. LABOR (Mano de Obra) ---
@@ -91,13 +92,22 @@ export const printServiceReport = (
     }
   });
 
-  // --- 2. PRODUCTS (Repuestos) ---
+  // --- 2. EXTRA LABOR & PRODUCTS ---
   extraItems.forEach((item: any) => {
-    productRows.push({
-      description: item.description,
-      price: Number(item.price) || 0,
-      isProduct: true
-    });
+    if (item.category === 'part') {
+      productRows.push({
+        description: item.description,
+        price: Number(item.price) || 0,
+        isProduct: true
+      });
+    } else {
+      // It's labor (or undefined category, treated as labor)
+      extraLaborRows.push({
+        description: item.description,
+        price: Number(item.price) || 0,
+        isExtraLabor: true
+      });
+    }
   });
 
   const grandTotal = basePrice + extraItems.reduce((acc: number, item: any) => acc + (Number(item.price) || 0), 0);
@@ -114,7 +124,8 @@ export const printServiceReport = (
         </div>
         <div style="text-align: right;">
            <div style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Informe de Servicio</div>
-           <div style="font-size: 16px; font-weight: 700;">${dateStr}</div>
+           <div style="font-size: 16px; font-weight: 700;">Service #${job.id}</div>
+           <div style="font-size: 14px; font-weight: 400; margin-top: 5px;">${dateStr}</div>
         </div>
       </div>
 
@@ -134,7 +145,7 @@ export const printServiceReport = (
         </div>
       </div>
 
-      <!-- SECTION 1: MANO DE OBRA -->
+      <!-- SECTION 1: MANO DE OBRA (Standard) -->
       <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
         <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
       </div>
@@ -161,6 +172,21 @@ export const printServiceReport = (
   }).join('')}
         </tbody>
       </table>
+
+      <!-- SECTION 1.5: EXTRA LABOR (Attached to Labor Section but with separators) -->
+      ${extraLaborRows.length > 0 ? `
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; margin-top: 0; border-top: 1px solid #eee;">
+            <tbody>
+            ${extraLaborRows.map(row => {
+    const price = row.price > 0 ? `$ ${row.price.toLocaleString('es-AR')}` : '';
+    return `<tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #000; font-weight: 700; text-transform: uppercase;">${row.description}</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 13px; font-weight: 700; color: #000;">${price}</td>
+                </tr>`;
+  }).join('')}
+            </tbody>
+        </table>
+      ` : ''}
 
       <!-- SECTION 2: PRODUCTOS (Only if exists) -->
       ${productRows.length > 0 ? `
