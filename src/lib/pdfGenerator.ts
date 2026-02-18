@@ -70,7 +70,7 @@ export const generateServiceReport = (service: ServiceRecord, bike: Bike, client
     // Filter only checked items
     const tasks = service.checklist_data
         ? Object.entries(service.checklist_data)
-            .filter(([_, done]) => done)
+            .filter(([, done]) => done)
             .map(([task]) => [task])
         : [];
 
@@ -84,7 +84,7 @@ export const generateServiceReport = (service: ServiceRecord, bike: Bike, client
             columnStyles: { 0: { cellWidth: 'auto' } },
             margin: { left: margin },
         });
-        // @ts-ignore
+        // @ts-expect-error - jspdf-autotable adds lastAutoTable property
         yPos = doc.lastAutoTable.finalY + 15;
     } else {
         doc.setFont("helvetica", "italic");

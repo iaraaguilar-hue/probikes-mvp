@@ -25,7 +25,7 @@ export default function BikeDetail() {
     const location = useLocation();
 
     // Determine ID context
-    let initialBikeId = parseInt(id || "0");
+    const initialBikeId = parseInt(id || "0");
     const paramClientId = parseInt(clientId || "0");
 
     // Logic: 
@@ -60,6 +60,9 @@ export default function BikeDetail() {
 
     // 1. Fetch Client Context First (Always valid if we have clientId or bikeId)
     // We need to know who the client is early.
+
+    // Service Dialog State
+    const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
 
     // Derived Active Client ID
     const [derivedClientId, setDerivedClientId] = useState<number>(activeClientId);
@@ -100,7 +103,7 @@ export default function BikeDetail() {
             // Clear the state so it doesn't trigger again on refresh or re-render
             navigate(location.pathname, { replace: true, state: {} });
         }
-    }, [location.state, activeBikeId, navigate, location.pathname]);
+    }, [location.state, activeBikeId, navigate, location.pathname, setIsServiceDialogOpen]);
 
     // Active Bike Data
     const activeBike = latestClientBikes?.find(b => b.id === activeBikeId);
@@ -119,9 +122,6 @@ export default function BikeDetail() {
     // UI State
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isAddBikeOpen, setIsAddBikeOpen] = useState(false);
-
-    // Service Dialog State
-    const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
 
     // Client State
     const [editName, setEditName] = useState("");
@@ -144,7 +144,6 @@ export default function BikeDetail() {
                 await updateClient(activeClientId, {
                     name: editName,
                     phone: editPhone,
-                    // @ts-ignore
                     email: editEmail,
                     dni: editDni
                 });

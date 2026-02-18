@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment, useMemo } from 'react';
+import { useEffect, useState, useRef, Fragment, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -17,18 +17,14 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { FileText, Eye, Download, Upload, ChevronUp, Pencil, Trash2, ClipboardList, Search, Calendar as CalendarIcon, FilterX } from 'lucide-react';
+import { FileText, Eye, Download, Upload, ChevronUp, Pencil, Trash2, ClipboardList, Search, X, Calendar as CalendarIcon, FilterX } from 'lucide-react';
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { deleteService } from '@/lib/api';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { DateRange } from "react-day-picker";
-import "react-day-picker/dist/style.css";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { getBikeCategory } from '@/utils/bikeRecognition';
+import { DateRange } from "react-day-picker";
 
 // Interface definitions...
 interface Client { id: number; name: string; dni?: string; phone: string; }
@@ -39,119 +35,44 @@ interface Service {
     status: string;
     created_at?: string;
     date_in?: string;
-    date_out?: string;
     service_type: string;
     [key: string]: any;
 }
 
-const datePickerRescueStyles = `
-  /* RESET Y BASE */
-  .react-datepicker-wrapper, 
-  .react-datepicker__input-container {
-    display: block;
-    width: 100%;
-  }
-
-  .react-datepicker {
-    font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 0.95rem;
-    background-color: #ffffff;
-    color: #1f2937;
-    border: 1px solid #f3f4f6; /* Borde muy sutil */
-    border-radius: 1rem; /* Bordes bien redondeados */
-    display: inline-block;
-    position: relative;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* Sombra suave y profunda */
-    padding: 1rem; /* ESPACIO INTERNO GENERAL */
-  }
-
-  /* CABECERA (Mes y Año) */
-  .react-datepicker__header {
-    text-align: center;
-    background-color: transparent; /* Fondo blanco limpio */
-    border-bottom: none; /* Sin líneas divisorias feas */
-    padding-top: 0.5rem;
-    padding-bottom: 1rem;
-  }
-
-  .react-datepicker__current-month {
-    font-weight: 700;
-    color: #111827;
-    font-size: 1.1rem;
-    margin-bottom: 0.5rem;
-    text-transform: capitalize;
-  }
-
-  /* NOMBRES DE DÍAS (Lu Ma Mi) */
-  .react-datepicker__day-names {
-    display: flex !important;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-  }
-  
-  .react-datepicker__day-name {
-    color: #9ca3af; /* Gris suave */
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    display: inline-block;
-    width: 2.5rem;
-    text-align: center;
-  }
-
-  /* GRILLA DE DÍAS */
-  .react-datepicker__month {
-    margin: 0;
-  }
-
-  .react-datepicker__week {
-    display: flex !important;
-    justify-content: space-between;
-    margin-bottom: 0.25rem; /* Espacio entre semanas */
-  }
-
-  /* DÍAS INDIVIDUALES (Círculos) */
-  .react-datepicker__day {
-    display: inline-block;
-    width: 2.5rem;  /* Más grandes */
-    height: 2.5rem;
-    line-height: 2.5rem;
-    text-align: center;
-    margin: 0;
-    border-radius: 50%; /* Círculo perfecto */
-    cursor: pointer;
-    color: #374151;
-    transition: all 0.2s ease; /* Animación suave */
-  }
-
-  /* HOVER Y SELECCIÓN */
-  .react-datepicker__day:hover {
-    background-color: #f0f9ff; /* Celeste muy pálido */
-    color: #0284c7;
-    font-weight: bold;
-  }
-
-  .react-datepicker__day--selected,
-  .react-datepicker__day--keyboard-selected {
-    background-color: #0ea5e9 !important; /* AZUL DE LA MARCA (Sky-500) */
-    color: white !important;
-    font-weight: bold;
-    box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.4); /* Sombra brillante azul */
-  }
-  
-  .react-datepicker__day--outside-month {
-    color: #e5e7eb;
-    pointer-events: none;
-  }
-  
-  /* FLECHAS DE NAVEGACIÓN */
-  .react-datepicker__navigation {
-    top: 1.2rem;
-  }
-`;
-
 export default function History() {
-    const readDataFromStorage = () => {
+    const [allJobs, setAllJobs] = useState<any[]>([]);
+    const [expandedIds, setExpandedIds] = useState<number[]>([]);
+    const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Filters State
+    const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState("Todos"); // "Todos", "En Taller", "Terminados"
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [brandFilter, setBrandFilter] = useState("all");
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const toggleExpand = (id: number) => {
+        setExpandedIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const handleDelete = async (id: number) => {
+        if (confirm("¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.")) {
+            try {
+                await deleteService(id);
+                loadData(); // Refresh list
+            } catch (e) {
+                alert("Error al eliminar servicio");
+            }
+        }
+    };
+
+    const loadData = () => {
         try {
             const rawDB = localStorage.getItem('mechanicPro_db');
             if (rawDB) {
@@ -163,8 +84,7 @@ export default function History() {
                 const joinedJobs = services.map(service => {
                     const bike = bikes.find(b => b.id === service.bike_id);
                     const client = clients.find(c => c.id === bike?.client_id);
-                    // Use date_out if available (Completed), otherwise date_in or created_at
-                    const rawDate = service.date_out || service.date_in || service.created_at || "2024-01-01T00:00:00";
+                    const rawDate = service.date_in || service.created_at || "2024-01-01T00:00:00";
                     let displayDate = "Sin fecha";
                     let dateObj = new Date();
                     try {
@@ -186,65 +106,24 @@ export default function History() {
                         clientName: client?.name || "Cliente Desconocido",
                         clientDni: client?.dni || "",
                         clientPhone: client?.phone || "",
-                        bikeBrand: (bike?.brand || "").trim(),
+                        bikeBrand: bike?.brand || "",
                         bikeModel: bike ? `${bike.brand} ${bike.model}` : "Bicicleta Desconocida",
                         serviceType: service.service_type || "General",
-                        bikeCategory: getBikeCategory(bike?.model, service.service_type),
                         rawJob: service
                     };
                 });
 
                 joinedJobs.sort((a, b) => new Date(a.rawDate || 0).getTime() - new Date(b.rawDate || 0).getTime()).reverse();
-                return joinedJobs;
+                setAllJobs(joinedJobs);
             }
         } catch (e) {
             console.error("Load Error", e);
         }
-        return [];
     };
-
-    const [allJobs, setAllJobs] = useState<any[]>(() => readDataFromStorage());
-    const [expandedIds, setExpandedIds] = useState<number[]>([]);
-    const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // Filters State
-    const [searchQuery, setSearchQuery] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState("Todas");
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-    const [brandFilter, setBrandFilter] = useState("all");
-
-    const toggleExpand = (id: number) => {
-        setExpandedIds(prev =>
-            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-        );
-    };
-
-    const handleDelete = async (id: number) => {
-        if (confirm("¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.")) {
-            try {
-                await deleteService(id);
-                setAllJobs(readDataFromStorage()); // Refresh list
-            } catch {
-                alert("Error al eliminar servicio");
-            }
-        }
-    };
-
-
 
     // Derived Lists
     const availableBrands = useMemo(() => {
-        const brands = new Set<string>();
-        allJobs.forEach(job => {
-            if (job.bikeBrand) {
-                // Normalize to Title Case
-                const normalized = job.bikeBrand.trim().toLowerCase().split(' ')
-                    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
-                brands.add(normalized);
-            }
-        });
+        const brands = new Set(allJobs.map(job => job.bikeBrand).filter(Boolean));
         return Array.from(brands).sort();
     }, [allJobs]);
 
@@ -262,17 +141,21 @@ export default function History() {
                 if (!matchesSearch) return false;
             }
 
-            // 2. Category Filter
-            if (categoryFilter !== "Todas" && job.bikeCategory !== categoryFilter) return false;
+            // 2. Status Filter
+            const status = job.status.toLowerCase();
+            const isCompleted = status === "completed" || status === "delivered" || status === "finalizado";
+            
+            if (statusFilter === "En Taller" && isCompleted) return false;
+            if (statusFilter === "Terminados" && !isCompleted) return false;
 
             // 3. Brand Filter
-            if (brandFilter !== "all" && job.bikeBrand.trim().toLowerCase() !== brandFilter.trim().toLowerCase()) return false;
+            if (brandFilter !== "all" && job.bikeBrand !== brandFilter) return false;
 
             // 4. Date Range Filter
             if (dateRange?.from) {
                 const jobDate = new Date(job.dateObj);
                 jobDate.setHours(0, 0, 0, 0);
-
+                
                 const fromDate = new Date(dateRange.from);
                 fromDate.setHours(0, 0, 0, 0);
 
@@ -287,11 +170,11 @@ export default function History() {
 
             return true;
         });
-    }, [allJobs, searchQuery, categoryFilter, brandFilter, dateRange]);
+    }, [allJobs, searchQuery, statusFilter, brandFilter, dateRange]);
 
     const clearFilters = () => {
         setSearchQuery("");
-        setCategoryFilter("Todas");
+        setStatusFilter("Todos");
         setBrandFilter("all");
         setDateRange(undefined);
     };
@@ -329,7 +212,7 @@ export default function History() {
                 } else {
                     alert("❌ Archivo inválido. No tiene el formato 'mechanicPro_db'.");
                 }
-            } catch { alert("Error leyendo archivo."); }
+            } catch (err) { alert("Error leyendo archivo."); }
         };
         reader.readAsText(file);
     };
@@ -340,7 +223,7 @@ export default function History() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
-                        <ClipboardList className="h-8 w-8 text-sky-500" />
+                        <ClipboardList className="h-8 w-8 text-[#f25a30]" />
                         Historial de Trabajos
                     </h1>
                     <p className="text-muted-foreground mt-1 text-lg">Gestión centralizada de servicios y mantenimientos.</p>
@@ -358,17 +241,17 @@ export default function History() {
 
             {/* Filters Bar */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col xl:flex-row gap-6 items-start xl:items-center justify-between">
-
+                
                 <div className="flex flex-col lg:flex-row gap-4 w-full xl:w-auto items-start lg:items-center">
                     {/* Date Picker */}
-                    <div className="grid gap-2 relative">
+                    <div className="grid gap-2">
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button
                                     id="date"
                                     variant={"outline"}
                                     className={cn(
-                                        "w-[240px] justify-start text-left font-normal bg-slate-50 border-slate-200 hover:bg-slate-100",
+                                        "w-[260px] justify-start text-left font-normal bg-slate-50 border-slate-200 hover:bg-slate-100",
                                         !dateRange && "text-muted-foreground"
                                     )}
                                 >
@@ -387,44 +270,38 @@ export default function History() {
                                     )}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent
-                                className="w-auto p-0 z-50 bg-transparent border-none shadow-none"
-                                align="start"
-                                sideOffset={8}
-                            >
-                                <style>{datePickerRescueStyles}</style>
-                                <div className="bg-white rounded-lg shadow-xl border border-gray-200">
-                                    <DatePicker
-                                        selected={dateRange?.from}
-                                        onChange={(dates) => {
-                                            const [start, end] = dates as [Date | null, Date | null];
-                                            setDateRange(start ? { from: start, to: end || undefined } : undefined);
-                                        }}
-                                        startDate={dateRange?.from}
-                                        endDate={dateRange?.to}
-                                        selectsRange
-                                        inline
-                                        locale={es}
-                                        monthsShown={1}
-                                    />
-                                </div>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange?.from}
+                                    selected={dateRange}
+                                    onSelect={setDateRange}
+                                    numberOfMonths={2}
+                                    locale={es}
+                                />
                             </PopoverContent>
                         </Popover>
                     </div>
 
-                    {/* Category Filter (Dropdown) */}
-                    <div className="w-[180px]">
-                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                            <SelectTrigger className="bg-slate-50 border-slate-200 text-slate-700">
-                                <SelectValue placeholder="Tipo de Bici" />
-                            </SelectTrigger>
-                            <SelectContent className="z-50 bg-white">
-                                <SelectItem value="Todas">Todos los Tipos</SelectItem>
-                                {["Ruta", "MTB", "Triatlón", "Gravel", "Otro"].map(cat => (
-                                    <SelectItem key={cat} value={cat === "Triatlón" ? "Triatlon" : cat}>{cat}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="h-8 w-px bg-slate-200 hidden lg:block mx-2"></div>
+
+                    {/* Status Pills */}
+                    <div className="flex bg-slate-100/80 p-1 rounded-lg">
+                        {["Todos", "En Taller", "Terminados"].map((status) => (
+                            <button
+                                key={status}
+                                onClick={() => setStatusFilter(status)}
+                                className={cn(
+                                    "px-4 py-1.5 rounded-md text-sm font-medium transition-all",
+                                    statusFilter === status
+                                        ? "bg-white text-slate-900 shadow-sm"
+                                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                                )}
+                            >
+                                {status}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Brand Filter */}
@@ -433,7 +310,7 @@ export default function History() {
                             <SelectTrigger className="bg-slate-50 border-slate-200">
                                 <SelectValue placeholder="Marca de Bici" />
                             </SelectTrigger>
-                            <SelectContent className="z-50 bg-white">
+                            <SelectContent>
                                 <SelectItem value="all">Todas las Marcas</SelectItem>
                                 {availableBrands.map(brand => (
                                     <SelectItem key={brand} value={brand}>{brand}</SelectItem>
@@ -443,12 +320,12 @@ export default function History() {
                     </div>
 
                     {/* Clear Filters */}
-                    {(categoryFilter !== "Todas" || brandFilter !== "all" || searchQuery) && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={clearFilters}
-                            className="text-muted-foreground hover:text-red-500 hover:bg-red-50 flex-shrink-0"
+                    {(statusFilter !== "Todos" || brandFilter !== "all" || dateRange || searchQuery) && (
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={clearFilters} 
+                            className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
                             title="Limpiar filtros"
                         >
                             <FilterX className="h-5 w-5" />
@@ -456,13 +333,13 @@ export default function History() {
                     )}
                 </div>
 
-                {/* Search - Expanded */}
-                <div className="relative flex-1 w-full lg:w-auto min-w-[200px]">
+                {/* Search */}
+                <div className="relative w-full xl:w-[350px]">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
                         type="search"
                         placeholder="Buscar cliente, modelo o ID..."
-                        className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#f25a30]/20 transition-all font-medium w-full"
+                        className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#f25a30]/20 transition-all font-medium"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -487,20 +364,20 @@ export default function History() {
                             {filteredJobs.map((job) => {
                                 const isExpanded = expandedIds.includes(job.id);
                                 const isCompleted = (job.status || '').toLowerCase().includes('complet') || (job.status || '').toLowerCase().includes('entregado');
-
+                                
                                 return (
                                     <Fragment key={job.uniqueId}>
                                         <TableRow className={cn(
                                             "hover:bg-slate-50/50 transition-colors cursor-pointer border-slate-100",
                                             isExpanded && "bg-slate-50/80 border-b-0"
                                         )}
-                                            onClick={() => toggleExpand(job.id)}
+                                        onClick={() => toggleExpand(job.id)}
                                         >
                                             <TableCell className="pl-6 py-4">
                                                 <Badge className={cn(
                                                     "rounded-md px-2.5 py-1 text-xs font-semibold shadow-none uppercase border-0",
-                                                    isCompleted
-                                                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                                    isCompleted 
+                                                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" 
                                                         : "bg-amber-100 text-amber-700 hover:bg-amber-200"
                                                 )}>
                                                     {job.status === "Completed" ? "LISTO" : job.status}
@@ -589,7 +466,7 @@ export default function History() {
                         preSelectedServiceId={editingServiceId}
                         onSuccess={() => {
                             setEditingServiceId(null);
-                            setAllJobs(readDataFromStorage());
+                            loadData();
                         }}
                     />
                 )
@@ -622,7 +499,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                             <span className="text-lg font-mono font-bold text-slate-700">$ {totalParts.toLocaleString("es-AR")}</span>
                         </div>
                     </div>
-                    <div className="bg-slate-900 text-white p-4 rounded-lg flex justify-between items-center shadow-lg shadow-slate-200">
+                     <div className="bg-slate-900 text-white p-4 rounded-lg flex justify-between items-center shadow-lg shadow-slate-200">
                         <span className="font-bold text-sm uppercase text-slate-400">Total Final</span>
                         <span className="text-2xl font-black tracking-tight">$ {service.totalPrice?.toLocaleString("es-AR") || 0}</span>
                     </div>
@@ -632,8 +509,8 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                 <div className="flex-[2] space-y-4 border-l pl-0 md:pl-8 border-slate-100">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Detalle de Items</h3>
                     <div className="space-y-3">
-                        {/* Parts */}
-                        {partItems.length > 0 && (
+                         {/* Parts */}
+                         {partItems.length > 0 && (
                             <div className="space-y-2">
                                 <div className="text-xs font-semibold text-slate-500 flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div> REPUESTOS
@@ -648,7 +525,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                         )}
 
                         {/* Labor */}
-                        <div className="space-y-2">
+                         <div className="space-y-2">
                             <div className="text-xs font-semibold text-slate-500 flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div> MANO DE OBRA
                             </div>
@@ -670,7 +547,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
             {/* Notes */}
             {service.mechanic_notes && (
                 <div className="mt-6 pt-4 border-t border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Notas del Mecánico</h4>
+                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Notas del Mecánico</h4>
                     <p className="text-sm text-slate-600 italic bg-amber-50/50 p-4 rounded-lg border border-amber-100">
                         "{service.mechanic_notes}"
                     </p>

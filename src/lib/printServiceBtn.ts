@@ -1,4 +1,4 @@
-// @ts-ignore
+// @ts-expect-error - html2pdf.js missing types
 import html2pdf from 'html2pdf.js';
 
 const TASKS_SPORT = [
