@@ -220,6 +220,11 @@ export const getClient = async (clientId: number) => {
     return client;
 };
 
+export const getAllBikes = async (): Promise<Bike[]> => {
+    const db = getDB();
+    return db.bikes || [];
+};
+
 export const getBike = async (bikeId: number) => {
     const db = getDB();
     const bike = db.bikes.find(b => b.id === bikeId);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { getFullHistory, type ServiceRecord } from '@/lib/api';
+import { getFullHistory, getAllBikes, type ServiceRecord, type Bike } from '@/lib/api';
 import {
     BarChart3,
     TrendingUp,
@@ -13,11 +13,13 @@ import {
     ArrowUpRight,
     ArrowDownRight,
     Brain,
-    Ticket
+    Ticket,
+    Tag
 } from 'lucide-react';
 
 export default function Metrics() {
     const [allServices, setAllServices] = useState<ServiceRecord[]>([]);
+    const [allBikes, setAllBikes] = useState<Bike[]>([]);
     const [dateStart, setDateStart] = useState<string>(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]); // Jan 1st
     const [dateEnd, setDateEnd] = useState<string>(new Date().toISOString().split('T')[0]); // Today
 
@@ -26,8 +28,9 @@ export default function Metrics() {
     }, []);
 
     const loadData = async () => {
-        const data = await getFullHistory();
-        setAllServices(data);
+        const [servicesData, bikesData] = await Promise.all([getFullHistory(), getAllBikes()]);
+        setAllServices(servicesData);
+        setAllBikes(bikesData);
     };
 
     // --- FILTER & ANALYTICS ENGINE ---
@@ -63,6 +66,9 @@ export default function Metrics() {
         // 4. Service Distribution (Types)
         const serviceTypeCounts: Record<string, number> = {};
 
+        // 5. Brand Market Share
+        const brandCounts: Record<string, number> = {};
+
         filtered.forEach(s => {
             // Financials
             totalRevenue += s.totalPrice || 0;
@@ -77,6 +83,26 @@ export default function Metrics() {
                 : rawType.toUpperCase();
 
             serviceTypeCounts[normalizedType] = (serviceTypeCounts[normalizedType] || 0) + 1;
+
+            // Analyze Brands
+            const bike = allBikes.find(b => b.id === s.bike_id);
+            let brandName = "Desconocida";
+            if (bike) {
+                if (bike.brand && bike.brand.trim()) {
+                    brandName = bike.brand;
+                } else if (bike.model && bike.model.trim()) {
+                    brandName = bike.model.split(' ')[0]; // fallback to first word of model
+                }
+            }
+
+            // Normalize Brand: Title Case
+            brandName = brandName.trim();
+            if (brandName.length > 0) {
+                brandName = brandName.charAt(0).toUpperCase() + brandName.slice(1).toLowerCase();
+            } else {
+                brandName = "Desconocida";
+            }
+            brandCounts[brandName] = (brandCounts[brandName] || 0) + 1;
 
             // Analyze Items
             const items = s.extraItems || [];
@@ -137,6 +163,34 @@ export default function Metrics() {
             }))
             .sort((a, b) => b.count - a.count);
 
+        // Process Brand Distribution
+        const brandEntries = Object.entries(brandCounts)
+            .sort(([, a], [, b]) => b - a);
+
+        let finalBrandData = [];
+        if (brandEntries.length > 4) {
+            const top4 = brandEntries.slice(0, 4);
+            const othersCount = brandEntries.slice(4).reduce((sum, [, count]) => sum + count, 0);
+            finalBrandData = top4.map(([brand, count]) => ({
+                brand,
+                count,
+                percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0
+            }));
+            if (othersCount > 0) {
+                finalBrandData.push({
+                    brand: 'Otras',
+                    count: othersCount,
+                    percentage: totalServices > 0 ? Math.round((othersCount / totalServices) * 100) : 0
+                });
+            }
+        } else {
+            finalBrandData = brandEntries.map(([brand, count]) => ({
+                brand,
+                count,
+                percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0
+            }));
+        }
+
         // Mix & Ticket
         const avgTicket = totalServices > 0 ? Math.round(totalRevenue / totalServices) : 0;
         const laborPerc = totalRevenue > 0 ? Math.round((totalLabor / totalRevenue) * 100) : 0;
@@ -152,12 +206,13 @@ export default function Metrics() {
             topProducts: sortedProducts,
             trends: trendData,
             serviceDist: serviceDistData,
+            brandDist: finalBrandData,
             avgTicket,
             laborPerc,
             partsPerc
         };
 
-    }, [allServices, dateStart, dateEnd]);
+    }, [allServices, allBikes, dateStart, dateEnd]);
 
     return (
         <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
@@ -258,18 +313,19 @@ export default function Metrics() {
             </div>
 
             {/* MAIN ANALYSIS GRID */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
 
                 {/* 1. STOCK RANKING (MICRO) */}
-                <Card className="h-full">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Package className="w-5 h-5 text-primary" />
-                            Ranking de Stock
-                            <span className="ml-auto text-xs font-normal text-muted-foreground bg-muted px-2 py-1 rounded-full">Top 5 Vendidos</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <Package className="w-6 h-6 text-sky-500" />
+                            <h3 className="text-lg font-bold text-gray-900">Ranking de Stock</h3>
+                        </div>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5 Vendidos</span>
+                    </div>
+
+                    <div className="flex-1">
                         {stats.topProducts.length === 0 ? (
                             <div className="h-40 flex items-center justify-center text-muted-foreground italic">
                                 No hay datos de ventas en este período.
@@ -292,19 +348,20 @@ export default function Metrics() {
                                 ))}
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
 
                 {/* 2. REPAIR TRENDS (MACRO) */}
-                <Card className="h-full">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <PieChart className="w-5 h-5 text-primary" />
-                            Tendencias de Taller
-                            <span className="ml-auto text-xs font-normal text-muted-foreground bg-muted px-2 py-1 rounded-full">Categorías Más Frecuentes</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <PieChart className="w-6 h-6 text-sky-500" />
+                            <h3 className="text-lg font-bold text-gray-900">Tendencias de Taller</h3>
+                        </div>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Categorías</span>
+                    </div>
+
+                    <div className="flex-1 flex flex-col justify-between">
                         {stats.trends.length === 0 ? (
                             <div className="h-40 flex items-center justify-center text-muted-foreground italic">
                                 No hay datos de servicios en este período.
@@ -313,12 +370,12 @@ export default function Metrics() {
                             <div className="space-y-6 pt-2">
                                 {stats.trends.map((cat, idx) => (
                                     <div key={idx} className="space-y-1">
-                                        <div className="flex justify-between text-sm font-medium">
+                                        <div className="flex justify-between items-center mb-1 text-sm font-medium">
                                             <span className="flex items-center gap-2">
                                                 {getCategoryIcon(cat.category)}
-                                                {cat.category}
+                                                <span className="text-slate-700">{cat.category}</span>
                                             </span>
-                                            <span className="text-slate-600">{cat.percentage}% <span className="text-xs text-muted-foreground">({cat.count})</span></span>
+                                            <span className="text-slate-600 font-bold">{cat.percentage}% <span className="text-xs text-muted-foreground font-normal">({cat.count})</span></span>
                                         </div>
                                         <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
                                             <div
@@ -333,19 +390,20 @@ export default function Metrics() {
                         <div className="mt-6 pt-4 border-t text-xs text-muted-foreground text-center">
                             * Agrupación automática basada en descripción de items.
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
 
                 {/* 3. SERVICE DISTRIBUTION (NEW) */}
-                <Card className="h-full">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Brain className="w-5 h-5 text-primary" />
-                            Distribución de Services
-                            <span className="ml-auto text-xs font-normal text-muted-foreground bg-muted px-2 py-1 rounded-full">Tipos Realizados</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <Brain className="w-6 h-6 text-sky-500" />
+                            <h3 className="text-lg font-bold text-gray-900">Distribución de Services</h3>
+                        </div>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Tipos</span>
+                    </div>
+
+                    <div className="flex-1">
                         {stats.serviceDist.length === 0 ? (
                             <div className="h-40 flex items-center justify-center text-muted-foreground italic">
                                 No hay datos de servicios en este período.
@@ -354,11 +412,10 @@ export default function Metrics() {
                             <div className="space-y-6 pt-2">
                                 {stats.serviceDist.map((item, idx) => (
                                     <div key={idx} className="space-y-1">
-                                        <div className="flex justify-between text-sm font-medium">
+                                        <div className="flex justify-between items-center mb-1 text-sm font-medium">
                                             <span className="flex items-center gap-2">
-                                                {/* Simple Icon based on Type */}
                                                 {item.type === 'Sport' ? '🚴' : item.type === 'Expert' ? '🚵' : '🔧'}
-                                                {item.type}
+                                                <span className="text-slate-700">{item.type}</span>
                                             </span>
                                             <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
                                         </div>
@@ -374,8 +431,50 @@ export default function Metrics() {
                                 ))}
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
+
+                {/* 4. BRAND DISTRIBUTION (NEW) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <Tag className="w-6 h-6 text-sky-500" />
+                            <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
+                        </div>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Distribución</span>
+                    </div>
+
+                    <div className="flex-1">
+                        {stats.brandDist.length === 0 ? (
+                            <div className="h-40 flex items-center justify-center text-muted-foreground italic">
+                                No hay datos de marcas en este período.
+                            </div>
+                        ) : (
+                            <div className="space-y-6 pt-2">
+                                {stats.brandDist.map((item, idx) => (
+                                    <div key={idx} className="space-y-1">
+                                        <div className="flex justify-between items-center mb-1 text-sm font-medium">
+                                            <span className="flex items-center gap-2">
+                                                <span className="text-slate-700">{item.brand}</span>
+                                            </span>
+                                            <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
+                                        </div>
+                                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-sky-500' :
+                                                    idx === 1 ? 'bg-sky-400' :
+                                                        idx === 2 ? 'bg-sky-300' :
+                                                            idx === 3 ? 'bg-slate-400' : 'bg-slate-300'
+                                                    }`}
+                                                style={{ width: `${item.percentage}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

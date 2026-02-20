@@ -17,7 +17,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { FileText, Eye, Download, Upload, ChevronUp, Pencil, Trash2, ClipboardList, Search, Calendar as CalendarIcon, FilterX } from 'lucide-react';
+import { FileText, Eye, Download, Upload, ChevronUp, Pencil, Trash2, ClipboardList, Search, Calendar as CalendarIcon, FilterX, Wrench, Package, Info, Tag } from 'lucide-react';
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { deleteService } from '@/lib/api';
 import { ServiceModal } from '@/components/ServiceModal';
@@ -609,71 +609,86 @@ function ExpandedServiceDetail({ job }: { job: any }) {
     const totalLabor = (service.basePrice || 0) + laborItems.reduce((acc: number, i: any) => acc + i.price, 0);
 
     return (
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm animate-in slide-in-from-top-2 duration-200">
+        <div className="bg-white border border-orange-100 rounded-xl p-6 shadow-sm animate-in slide-in-from-top-2 duration-200">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-gray-100 gap-4">
+                <h2 className="text-xl font-bold text-orange-600 flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5" />
+                    Detalle del Service #{job.id} <span className="text-gray-400 font-normal text-sm ml-2">| {job.bikeModel}</span>
+                </h2>
+                <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-orange-500 hover:bg-orange-600 text-white font-semibold">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Imprimir Comprobante
+                </Button>
+            </div>
+
             <div className="flex flex-col md:flex-row gap-8">
                 {/* Left: Summary */}
                 <div className="flex-1 space-y-4">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Resumen del Trabajo</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-50 p-3 rounded-lg">
-                            <span className="text-xs text-slate-500 block mb-1">Mano de Obra</span>
-                            <span className="text-lg font-mono font-bold text-slate-700">$ {totalLabor.toLocaleString("es-AR")}</span>
+                    <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                        <Info className="w-4 h-4" /> Resumen del Trabajo
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100">
+                            <span className="text-xs text-sky-600 font-medium block mb-1">Mano de Obra</span>
+                            <span className="text-xl font-mono font-bold text-slate-800">$ {totalLabor.toLocaleString("es-AR")}</span>
                         </div>
-                        <div className="bg-slate-50 p-3 rounded-lg">
-                            <span className="text-xs text-slate-500 block mb-1">Repuestos</span>
-                            <span className="text-lg font-mono font-bold text-slate-700">$ {totalParts.toLocaleString("es-AR")}</span>
+                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100">
+                            <span className="text-xs text-sky-600 font-medium block mb-1">Repuestos</span>
+                            <span className="text-xl font-mono font-bold text-slate-800">$ {totalParts.toLocaleString("es-AR")}</span>
                         </div>
                     </div>
-                    <div className="bg-slate-900 text-white p-4 rounded-lg flex justify-between items-center shadow-lg shadow-slate-200">
-                        <span className="font-bold text-sm uppercase text-slate-400">Total Final</span>
-                        <span className="text-2xl font-black tracking-tight">$ {service.totalPrice?.toLocaleString("es-AR") || 0}</span>
+                    <div className="bg-orange-50 p-5 rounded-xl flex justify-between items-center shadow-sm border border-orange-200 mt-6">
+                        <span className="font-bold text-sm uppercase text-orange-800">Total Final</span>
+                        <span className="text-3xl font-bold text-orange-600">$ {service.totalPrice?.toLocaleString("es-AR") || 0}</span>
                     </div>
                 </div>
 
                 {/* Right: Detailed List */}
-                <div className="flex-[2] space-y-4 border-l pl-0 md:pl-8 border-slate-100">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Detalle de Items</h3>
-                    <div className="space-y-3">
-                        {/* Parts */}
-                        {partItems.length > 0 && (
-                            <div className="space-y-2">
-                                <div className="text-xs font-semibold text-slate-500 flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div> REPUESTOS
-                                </div>
-                                {partItems.map((item: any) => (
-                                    <div key={item.id} className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded border border-slate-100">
-                                        <span className="text-slate-700">{item.description}</span>
-                                        <span className="font-mono font-medium text-slate-600">$ {item.price?.toLocaleString("es-AR") || 0}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Labor */}
-                        <div className="space-y-2">
-                            <div className="text-xs font-semibold text-slate-500 flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div> MANO DE OBRA
-                            </div>
-                            <div className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded border border-slate-100">
-                                <span className="text-slate-700">Service Base ({service.service_type})</span>
-                                <span className="font-mono font-medium text-slate-600">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
+                <div className="flex-[2] space-y-6 md:pl-8 md:border-l border-gray-100">
+                    <div>
+                        <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                            <Wrench className="w-4 h-4" /> Mano de Obra
+                        </h3>
+                        <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50">
+                            <div className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100">
+                                <span className="text-slate-700 font-medium">Service Base ({service.service_type})</span>
+                                <span className="font-mono font-bold text-slate-700">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
                             </div>
                             {laborItems.map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded border border-slate-100">
+                                <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100">
                                     <span className="text-slate-700">{item.description}</span>
-                                    <span className="font-mono font-medium text-slate-600">$ {item.price?.toLocaleString("es-AR") || 0}</span>
+                                    <span className="font-mono font-bold text-slate-700">$ {item.price?.toLocaleString("es-AR") || 0}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
+
+                    {partItems.length > 0 && (
+                        <div>
+                            <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                                <Package className="w-4 h-4" /> Repuestos
+                            </h3>
+                            <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50">
+                                {partItems.map((item: any) => (
+                                    <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100">
+                                        <span className="text-slate-700">{item.description}</span>
+                                        <span className="font-mono font-bold text-slate-700">$ {item.price?.toLocaleString("es-AR") || 0}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Notes */}
             {service.mechanic_notes && (
-                <div className="mt-6 pt-4 border-t border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Notas del Mecánico</h4>
-                    <p className="text-sm text-slate-600 italic bg-amber-50/50 p-4 rounded-lg border border-amber-100">
+                <div className="mt-8 pt-6 border-t border-gray-100">
+                    <h4 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                        <Tag className="w-4 h-4" /> Notas del Mecánico
+                    </h4>
+                    <p className="text-sm text-slate-700 italic bg-slate-50 p-4 rounded-lg border border-slate-200">
                         "{service.mechanic_notes}"
                     </p>
                 </div>
