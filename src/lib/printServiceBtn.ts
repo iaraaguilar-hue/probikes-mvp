@@ -1,4 +1,3 @@
-// @ts-expect-error - html2pdf.js missing types
 import html2pdf from 'html2pdf.js';
 
 const TASKS_SPORT = [
@@ -63,8 +62,9 @@ export const printServiceReport = (
   if (serviceType.includes('SPORT')) serviceTasks = TASKS_SPORT;
   else if (serviceType.includes('EXPERT')) serviceTasks = TASKS_EXPERT;
   // Logic for "OTRO" or undefined types: Use notes as the breakdown
-  else if (job.notes) {
-    serviceTasks = job.notes.split('\n').filter((t: string) => t.trim().length > 0);
+  else if (job.notes || job.mechanic_notes) {
+    const notesStr = job.notes || job.mechanic_notes;
+    serviceTasks = notesStr.split('\n').filter((t: string) => t.trim().length > 0);
   }
 
   const basePrice = Number(job.basePrice) || 0;
@@ -210,10 +210,10 @@ export const printServiceReport = (
          <div style="font-size: 30px; font-weight: 900; color: #333;">$ ${grandTotal.toLocaleString('es-AR')}</div>
       </div>
 
-      ${job.notes ? `
+      ${(job.notes || job.mechanic_notes) ? `
         <div style="margin-top: 50px; padding-top: 15px; border-top: 1px solid #eee;">
           <div style="font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">Observaciones</div>
-          <div style="font-size: 12px; color: #555;">${job.notes}</div>
+          <div style="font-size: 12px; color: #555;">${job.notes || job.mechanic_notes}</div>
         </div>
       ` : ''
     }

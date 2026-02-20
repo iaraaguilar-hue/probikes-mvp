@@ -11,7 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
+
 import {
     Popover,
     PopoverContent,
@@ -24,8 +24,10 @@ import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { DateRange } from "react-day-picker";
-import "react-day-picker/dist/style.css";
+type DateRange = {
+    from: Date;
+    to?: Date;
+};
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getBikeCategory } from '@/utils/bikeRecognition';

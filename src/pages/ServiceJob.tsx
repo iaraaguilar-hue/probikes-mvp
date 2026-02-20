@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
 
 // URL DEL WEBHOOK (Verificada)
-const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bvpeibjono39q80kiarwcswn7cwwoa6c";
+const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/u9guskrdv639r6vfitag4x4cqllhrokr";
 
 export default function ServiceJob() {
     const { id } = useParams();
