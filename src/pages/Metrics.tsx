@@ -84,15 +84,12 @@ export default function Metrics() {
 
             serviceTypeCounts[normalizedType] = (serviceTypeCounts[normalizedType] || 0) + 1;
 
-            // Analyze Brands
+            // Analyze Brands (100% Dynamic from Model)
             const bike = allBikes.find(b => b.id === s.bike_id);
             let brandName = "Desconocida";
-            if (bike) {
-                if (bike.brand && bike.brand.trim()) {
-                    brandName = bike.brand;
-                } else if (bike.model && bike.model.trim()) {
-                    brandName = bike.model.split(' ')[0]; // fallback to first word of model
-                }
+            if (bike && bike.model && bike.model.trim()) {
+                // Extract first word only, eliminating dictionary dependency
+                brandName = bike.model.trim().split(/\s+/)[0];
             }
 
             // Normalize Brand: Title Case
